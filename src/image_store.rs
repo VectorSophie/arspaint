@@ -9,6 +9,7 @@ pub struct ImageStore {
     height: u32,
     pub layers: Vec<Layer>,
     pub active_layer: usize,
+    pub selection: Option<image::GrayImage>,
     // Cached final render
     composite: RgbaImage,
     composite_dirty: bool,
@@ -24,6 +25,7 @@ impl ImageStore {
             height,
             layers: vec![layer],
             active_layer: 0,
+            selection: None,
             composite: ImageBuffer::new(width, height),
             composite_dirty: true,
         };
@@ -60,6 +62,7 @@ impl ImageStore {
             height,
             layers: vec![layer],
             active_layer: 0,
+            selection: None,
             composite: ImageBuffer::new(width, height),
             composite_dirty: true,
         };
@@ -286,5 +289,61 @@ impl ImageStore {
 
     pub fn mark_dirty(&mut self) {
         self.composite_dirty = true;
+    }
+
+    pub fn resize(&mut self, new_width: u32, new_height: u32) {
+        if new_width == self.width && new_height == self.height {
+            return;
+        }
+
+        for (idx, layer) in self.layers.iter_mut().enumerate() {
+            match &mut layer.data {
+                LayerData::Raster(ref mut img) => {
+                    let mut new_img = ImageBuffer::new(new_width, new_height);
+                    if idx == 0 {
+                        for p in new_img.pixels_mut() {
+                            *p = Rgba([255, 255, 255, 255]);
+                        }
+                    }
+                    let copy_w = self.width.min(new_width);
+                    let copy_h = self.height.min(new_height);
+                    for y in 0..copy_h {
+                        for x in 0..copy_w {
+                            new_img.put_pixel(x, y, *img.get_pixel(x, y));
+                        }
+                    }
+                    *img = new_img;
+                }
+                LayerData::Tone { ref mut buffer, .. } => {
+                    let mut new_img = ImageBuffer::new(new_width, new_height);
+                    let copy_w = self.width.min(new_width);
+                    let copy_h = self.height.min(new_height);
+                    for y in 0..copy_h {
+                        for x in 0..copy_w {
+                            new_img.put_pixel(x, y, *buffer.get_pixel(x, y));
+                        }
+                    }
+                    *buffer = new_img;
+                }
+                _ => {}
+            }
+        }
+
+        if let Some(mask) = &mut self.selection {
+            let mut new_mask = ImageBuffer::new(new_width, new_height);
+            let copy_w = self.width.min(new_width);
+            let copy_h = self.height.min(new_height);
+            for y in 0..copy_h {
+                for x in 0..copy_w {
+                    new_mask.put_pixel(x, y, *mask.get_pixel(x, y));
+                }
+            }
+            *mask = new_mask;
+        }
+
+        self.width = new_width;
+        self.height = new_height;
+        self.composite = ImageBuffer::new(new_width, new_height);
+        self.mark_dirty();
     }
 }

@@ -138,9 +138,17 @@ impl Tool for RectangleTool {
                 let w = w.min(image.width() - x);
                 let h = h.min(image.height() - y);
                 let layer_index = image.active_layer;
-                let alpha_locked = image.layers[layer_index].alpha_locked;
+                let selection = &image.selection;
+                let layer = &mut image.layers[layer_index];
+                let alpha_locked = layer.alpha_locked;
 
-                if let Some(target_buffer) = image.get_active_raster_buffer_mut() {
+                let target_buffer = match &mut layer.data {
+                    crate::layers::LayerData::Raster(img) => Some(img),
+                    crate::layers::LayerData::Tone { buffer, .. } => Some(buffer),
+                    _ => None,
+                };
+
+                if let Some(target_buffer) = target_buffer {
                     if w > 0 && h > 0 {
                         let old_patch = target_buffer.view(x, y, w, h).to_image();
                         let layer_patch = self.layer.view(x, y, w, h).to_image();
@@ -149,13 +157,23 @@ impl Tool for RectangleTool {
                             for lx in 0..w {
                                 let pixel = layer_patch.get_pixel(lx, ly);
                                 if pixel[3] > 0 {
-                                    let target_pixel = target_buffer.get_pixel(x + lx, y + ly);
-                                    if !alpha_locked || target_pixel[3] > 0 {
-                                        let mut final_pixel = *pixel;
-                                        if alpha_locked {
-                                            final_pixel[3] = target_pixel[3];
+                                    let mut selected = true;
+                                    if let Some(mask) = selection {
+                                        let mask_val = mask.get_pixel(x + lx, y + ly)[0];
+                                        if mask_val == 0 {
+                                            selected = false;
                                         }
-                                        target_buffer.put_pixel(x + lx, y + ly, final_pixel);
+                                    }
+
+                                    if selected {
+                                        let target_pixel = target_buffer.get_pixel(x + lx, y + ly);
+                                        if !alpha_locked || target_pixel[3] > 0 {
+                                            let mut final_pixel = *pixel;
+                                            if alpha_locked {
+                                                final_pixel[3] = target_pixel[3];
+                                            }
+                                            target_buffer.put_pixel(x + lx, y + ly, final_pixel);
+                                        }
                                     }
                                     self.layer.put_pixel(x + lx, y + ly, Rgba([0, 0, 0, 0]));
                                 }
