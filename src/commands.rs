@@ -1,4 +1,5 @@
 use crate::image_store::ImageStore;
+use crate::layers::LayerData;
 use image::{GenericImage, RgbaImage};
 
 pub trait Command {
@@ -9,7 +10,7 @@ pub trait Command {
 
 pub struct CommandStack {
     commands: Vec<Box<dyn Command>>,
-    cursor: usize, // Points to the slot for the *next* command (or after the last executed one)
+    cursor: usize,
 }
 
 impl CommandStack {
@@ -21,7 +22,6 @@ impl CommandStack {
     }
 
     pub fn push(&mut self, command: Box<dyn Command>) {
-        // If we are in the middle of the stack, drop all future commands (no redo after new action)
         if self.cursor < self.commands.len() {
             self.commands.truncate(self.cursor);
         }
@@ -33,6 +33,7 @@ impl CommandStack {
         if self.cursor > 0 {
             self.cursor -= 1;
             self.commands[self.cursor].undo(image);
+            image.mark_dirty();
         }
     }
 
@@ -40,21 +41,25 @@ impl CommandStack {
         if self.cursor < self.commands.len() {
             self.commands[self.cursor].redo(image);
             self.cursor += 1;
+            image.mark_dirty();
         }
     }
 
+    #[allow(dead_code)]
     pub fn can_undo(&self) -> bool {
         self.cursor > 0
     }
 
+    #[allow(dead_code)]
     pub fn can_redo(&self) -> bool {
         self.cursor < self.commands.len()
     }
 }
 
-// A generic command that stores a rectangular patch of the image before and after the operation
 pub struct PatchCommand {
+    #[allow(dead_code)]
     pub name: String,
+    pub layer_index: usize,
     pub x: u32,
     pub y: u32,
     pub old_patch: RgbaImage,
@@ -67,10 +72,24 @@ impl Command for PatchCommand {
     }
 
     fn undo(&self, image: &mut ImageStore) {
-        let _ = image.buffer.copy_from(&self.old_patch, self.x, self.y);
+        if let Some(layer) = image.layers.get_mut(self.layer_index) {
+            match &mut layer.data {
+                LayerData::Raster(img) | LayerData::Tone { buffer: img, .. } => {
+                    let _ = img.copy_from(&self.old_patch, self.x, self.y);
+                }
+                _ => {} // Vector undo not implemented in PatchCommand
+            }
+        }
     }
 
     fn redo(&self, image: &mut ImageStore) {
-        let _ = image.buffer.copy_from(&self.new_patch, self.x, self.y);
+        if let Some(layer) = image.layers.get_mut(self.layer_index) {
+            match &mut layer.data {
+                LayerData::Raster(img) | LayerData::Tone { buffer: img, .. } => {
+                    let _ = img.copy_from(&self.new_patch, self.x, self.y);
+                }
+                _ => {}
+            }
+        }
     }
 }

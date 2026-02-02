@@ -1,10 +1,11 @@
+use crate::layers::Layer;
 use crate::state::AppState;
 use crate::tools::ToolInput;
 use eframe::egui::{
-    self, Color32, Context, PointerButton, Pos2, Rect, ScrollArea, Sense, TextureOptions, Ui, Vec2,
+    self, Color32, Context, PointerButton, Pos2, Rect, Sense, TextureOptions, Ui, Vec2,
 };
 use eframe::Frame;
-use image::{Rgba, RgbaImage};
+use image::Rgba;
 
 pub struct ArsApp {
     state: AppState,
@@ -35,26 +36,30 @@ impl ArsApp {
     }
 
     fn update_textures(&mut self, ctx: &Context) {
-        // Update base texture if dirty
+        // Update base texture from composite if dirty
+        // Note: image_store.get_composite() handles dirty checking internally for the buffer
+        let composite = self.state.image.get_composite();
+
+        // We still need to upload to GPU if changed
+        // Use a simple checksum or just the image_dirty flag from AppState?
+        // AppState doesn't track dirty, ImageStore does.
+        // But ImageStore.get_composite() returns ref.
+        // We need a way to know if we need to call load_texture.
+        // Let's rely on self.image_dirty which we set when tools commit.
+
         if self.image_dirty || self.base_texture.is_none() {
-            let image = &self.state.image.buffer;
             let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                [image.width() as usize, image.height() as usize],
-                image.as_raw(),
+                [composite.width() as usize, composite.height() as usize],
+                composite.as_raw(),
             );
 
-            self.base_texture = Some(ctx.load_texture(
-                "base_image",
-                color_image,
-                TextureOptions::NEAREST, // Pixel art friendly
-            ));
+            self.base_texture =
+                Some(ctx.load_texture("base_image", color_image, TextureOptions::NEAREST));
             self.image_dirty = false;
         }
 
         // Update layer texture from tool
         if let Some((layer, _x, _y)) = self.state.active_tool.get_temp_layer() {
-            // Optimization: Only upload if changed?
-            // For now, upload every frame if tool has layer
             let color_image = egui::ColorImage::from_rgba_unmultiplied(
                 [layer.width() as usize, layer.height() as usize],
                 layer.as_raw(),
@@ -66,6 +71,119 @@ impl ArsApp {
         }
     }
 
+    fn render_layers_panel(&mut self, ui: &mut Ui) {
+        ui.heading("Layers");
+        ui.separator();
+
+        if ui.button("Add Layer").clicked() {
+            let idx = self.state.image.layers.len() + 1;
+            let layer = Layer::new_raster(
+                self.state.image.width(),
+                self.state.image.height(),
+                format!("Layer {}", idx),
+            );
+            self.state.image.add_layer(layer);
+            self.image_dirty = true;
+        }
+
+        ui.separator();
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            // Iterate in reverse to show Top layer at Top of list
+            let indices: Vec<usize> = (0..self.state.image.layers.len()).rev().collect();
+
+            for idx in indices {
+                let is_active = idx == self.state.image.active_layer;
+
+                ui.horizontal(|ui| {
+                    // Visibility toggle
+                    let mut visible = self.state.image.layers[idx].visible;
+                    if ui.checkbox(&mut visible, "👁").changed() {
+                        self.state.image.layers[idx].visible = visible;
+                        self.state.image.mark_dirty();
+                        self.image_dirty = true;
+                    }
+
+                    let mut alpha_locked = self.state.image.layers[idx].alpha_locked;
+                    if ui
+                        .checkbox(&mut alpha_locked, "🔒")
+                        .on_hover_text("Lock Transparent Pixels")
+                        .changed()
+                    {
+                        self.state.image.layers[idx].alpha_locked = alpha_locked;
+                    }
+
+                    let mut clipped = self.state.image.layers[idx].clipped;
+                    if ui
+                        .checkbox(&mut clipped, "🖇")
+                        .on_hover_text("Clip to Layer Below")
+                        .changed()
+                    {
+                        self.state.image.layers[idx].clipped = clipped;
+                        self.state.image.mark_dirty();
+                    }
+
+                    // Selection
+                    let name = self.state.image.layers[idx].name.clone();
+                    let response = ui.selectable_label(is_active, &name);
+                    if response.clicked() {
+                        self.state.image.active_layer = idx;
+                    }
+                });
+
+                // Layer properties if active
+                if is_active {
+                    let layer = &mut self.state.image.layers[idx];
+                    let mut opacity = layer.opacity;
+                    let mut blend = layer.blend;
+
+                    ui.indent(format!("props_{}", idx), |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Opacity");
+                            if ui.add(egui::Slider::new(&mut opacity, 0.0..=1.0)).changed() {
+                                // Will update after closure
+                            }
+                        });
+
+                        egui::ComboBox::from_label("Blend")
+                            .selected_text(format!("{:?}", blend))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut blend,
+                                    crate::layers::BlendMode::Normal,
+                                    "Normal",
+                                );
+                                ui.selectable_value(
+                                    &mut blend,
+                                    crate::layers::BlendMode::Multiply,
+                                    "Multiply",
+                                );
+                                ui.selectable_value(
+                                    &mut blend,
+                                    crate::layers::BlendMode::Add,
+                                    "Add",
+                                );
+                                ui.selectable_value(
+                                    &mut blend,
+                                    crate::layers::BlendMode::Screen,
+                                    "Screen",
+                                );
+                            });
+                    });
+
+                    // Apply changes
+                    let layer_mut = &mut self.state.image.layers[idx];
+                    if layer_mut.opacity != opacity || layer_mut.blend != blend {
+                        layer_mut.opacity = opacity;
+                        layer_mut.blend = blend;
+                        self.state.image.mark_dirty();
+                        self.image_dirty = true;
+                    }
+                }
+            }
+        });
+    }
+
     fn render_canvas(&mut self, ui: &mut Ui) {
         let canvas_size = ui.available_size();
         let (response, painter) = ui.allocate_painter(canvas_size, Sense::drag());
@@ -75,11 +193,34 @@ impl ArsApp {
             self.state.image.height() as f32,
         ) * self.zoom;
 
-        // Center image if smaller than canvas, else respect pan
         let screen_center = response.rect.center();
         let image_rect = Rect::from_center_size(screen_center + self.pan, image_size);
 
-        // Draw Base
+        let checker_size = 16.0 * self.zoom;
+        let mut checker_painter = painter.with_clip_rect(image_rect);
+        checker_painter.rect_filled(image_rect, 0.0, Color32::from_gray(200));
+
+        let rows = (image_rect.height() / checker_size).ceil() as i32;
+        let cols = (image_rect.width() / checker_size).ceil() as i32;
+
+        for r in 0..rows {
+            for c in 0..cols {
+                if (r + c) % 2 == 1 {
+                    let rect = Rect::from_min_size(
+                        image_rect.min
+                            + Vec2::new(c as f32 * checker_size, r as f32 * checker_size),
+                        Vec2::splat(checker_size),
+                    );
+                    checker_painter.rect_filled(
+                        rect.intersect(image_rect),
+                        0.0,
+                        Color32::from_gray(180),
+                    );
+                }
+            }
+        }
+
+        // Draw Composite Base
         if let Some(texture) = &self.base_texture {
             painter.image(
                 texture.id(),
@@ -89,7 +230,7 @@ impl ArsApp {
             );
         }
 
-        // Draw Layer
+        // Draw Temp Tool Layer (e.g. brush stroke in progress)
         if let Some(texture) = &self.layer_texture {
             painter.image(
                 texture.id(),
@@ -99,28 +240,23 @@ impl ArsApp {
             );
         }
 
-        // Draw Canvas Border
+        // Canvas Border
         painter.rect_stroke(
             image_rect,
             0.0,
             egui::Stroke::new(1.0, Color32::from_gray(60)),
         );
 
-        // Handle Input
-        // Zoom
+        // Input Handling
         if ui.input(|i| i.modifiers.ctrl) {
             let scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
             if scroll_delta != 0.0 {
                 let old_zoom = self.zoom;
                 self.zoom *= if scroll_delta > 0.0 { 1.1 } else { 0.9 };
                 self.zoom = self.zoom.clamp(0.1, 50.0);
-
-                // Adjust pan to zoom towards pointer?
-                // For simplicity, just zoom.
-                let _ = old_zoom; // Suppress unused warning
+                let _ = old_zoom;
             }
         } else {
-            // Pan with Middle Mouse or Space + Drag
             if response.dragged_by(PointerButton::Middle)
                 || (ui.input(|i| i.key_down(egui::Key::Space)) && response.dragged())
             {
@@ -128,59 +264,45 @@ impl ArsApp {
             }
         }
 
-        // Tool Input
-        // We only pass input if we are hovering the image and not panning
         let is_panning = response.dragged_by(PointerButton::Middle)
             || ui.input(|i| i.key_down(egui::Key::Space));
 
         if !is_panning {
             let pointer_pos = response.interact_pointer_pos();
             let hover_pos_in_image = pointer_pos.map(|pos| {
-                // Transform screen pos to image pixel coords
                 let relative = pos - image_rect.min;
                 let x = (relative.x / self.zoom) as i32;
                 let y = (relative.y / self.zoom) as i32;
                 Pos2::new(x as f32, y as f32)
             });
 
-            // Filter out of bounds?
-            // Tool might handle OOB, but usually we only paint inside.
-
             let input = ToolInput {
                 pos: hover_pos_in_image,
                 is_pressed: response.dragged_by(PointerButton::Primary)
-                    || response.drag_started_by(PointerButton::Primary), // is_down
-                is_released: response.drag_released_by(PointerButton::Primary),
+                    || response.drag_started_by(PointerButton::Primary),
+                is_released: response.drag_stopped_by(PointerButton::Primary),
             };
 
-            // Call Tool Update
             let command = self.state.active_tool.update(
                 &mut self.state.image,
+                &self.state.tool_settings,
                 &input,
                 self.state.primary_color,
             );
 
             if let Some(cmd) = command {
-                // Execute immediately?
-                // Wait, the tool already modified the image?
-                // Our BrushTool modifies the Layer.
-                // It returns a Command when it Commits (merges Layer to Image).
-                // But the Command.undo needs to restore the state.
-                // The Command returned by BrushTool contains the "Undo" logic (copy old patch).
-                // BUT `BrushTool::update` does NOT execute the merge.
-                // Wait, `BrushTool` merge logic:
-                // "Extract old patch -> Blend -> Extract new patch -> Return Command".
-                // Yes, `BrushTool` DOES the merge inside `update`.
-                // So the Image is ALREADY modified.
-                // We just need to push the command to the stack.
                 self.state.command_stack.push(cmd);
                 self.image_dirty = true;
             }
 
-            // Draw Cursor
             if let Some(pos) = pointer_pos {
                 if image_rect.contains(pos) {
-                    self.state.active_tool.draw_cursor(ui, &painter, pos);
+                    self.state.active_tool.draw_cursor(
+                        ui,
+                        &painter,
+                        &self.state.tool_settings,
+                        pos,
+                    );
                 }
             }
         }
@@ -190,6 +312,12 @@ impl ArsApp {
 impl eframe::App for ArsApp {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
         self.update_textures(ctx);
+
+        egui::SidePanel::right("right_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                self.render_layers_panel(ui);
+            });
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -270,18 +398,52 @@ impl eframe::App for ArsApp {
 
                 ui.label(format!("Active: {}", self.state.active_tool.name()));
 
-                self.state.active_tool.configure(ui);
+                self.state
+                    .active_tool
+                    .configure(ui, &mut self.state.tool_settings);
 
                 ui.separator();
                 ui.label("Color:");
-                let mut color = [
-                    self.state.primary_color[0],
-                    self.state.primary_color[1],
-                    self.state.primary_color[2],
-                ];
-                if ui.color_edit_button_srgb(&mut color).changed() {
-                    self.state.primary_color = Rgba([color[0], color[1], color[2], 255]);
-                }
+
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        let mut color = [
+                            self.state.primary_color[0],
+                            self.state.primary_color[1],
+                            self.state.primary_color[2],
+                        ];
+                        if ui.color_edit_button_srgb(&mut color).changed() {
+                            self.state.primary_color = Rgba([color[0], color[1], color[2], 255]);
+                        }
+                        ui.label("Primary");
+                    });
+
+                    ui.horizontal_wrapped(|ui| {
+                        for i in 0..self.state.palette.len() {
+                            let p_color = self.state.palette[i];
+                            let c32 = Color32::from_rgba_unmultiplied(
+                                p_color[0], p_color[1], p_color[2], p_color[3],
+                            );
+
+                            let (rect, response) =
+                                ui.allocate_at_least(Vec2::splat(18.0), Sense::click());
+                            ui.painter().rect_filled(rect, 2.0, c32);
+                            if response.clicked() {
+                                self.state.primary_color = p_color;
+                            }
+                            if response.secondary_clicked() {
+                                self.state.palette[i] = self.state.primary_color;
+                            }
+                        }
+                        if ui
+                            .button("+")
+                            .on_hover_text("Add current color to palette")
+                            .clicked()
+                        {
+                            self.state.palette.push(self.state.primary_color);
+                        }
+                    });
+                });
             });
         });
 

@@ -5,7 +5,6 @@ use egui::{Color32, Painter, Pos2, Rect, Ui};
 use image::{GenericImage, GenericImageView, ImageBuffer, Rgba, RgbaImage};
 
 pub struct EllipseTool {
-    pub width: f32,
     layer: RgbaImage,
     start_pos: Option<Pos2>,
     current_pos: Option<Pos2>,
@@ -15,7 +14,6 @@ pub struct EllipseTool {
 impl EllipseTool {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
-            width: 2.0,
             layer: ImageBuffer::new(width, height),
             start_pos: None,
             current_pos: None,
@@ -23,7 +21,7 @@ impl EllipseTool {
         }
     }
 
-    fn draw_ellipse_on_layer(&mut self, start: Pos2, end: Pos2, color: Rgba<u8>) {
+    fn draw_ellipse_on_layer(&mut self, start: Pos2, end: Pos2, color: Rgba<u8>, width: f32) {
         if let Some(rect) = self.dirty_rect {
             let x = rect.min.x as u32;
             let y = rect.min.y as u32;
@@ -46,8 +44,6 @@ impl EllipseTool {
 
         let mut new_dirty: Option<Rect> = None;
 
-        // Simple ellipse approximation by stepping angle
-        // Circumference approx: 2 * pi * sqrt((a^2 + b^2) / 2)
         let circ =
             2.0 * std::f32::consts::PI * ((radius_x.powi(2) + radius_y.powi(2)) / 2.0).sqrt();
         let steps = circ.max(10.0) as u32;
@@ -58,19 +54,18 @@ impl EllipseTool {
             let y = center_y + radius_y * t.sin();
             let pos = Pos2::new(x, y);
 
-            // Draw "brush" at this point
             let x = pos.x as i32;
             let y = pos.y as i32;
-            let r = self.width as i32;
+            let r = width as i32;
             let r_sq = r * r;
 
-            let width = self.layer.width() as i32;
-            let height = self.layer.height() as i32;
+            let width_img = self.layer.width() as i32;
+            let height_img = self.layer.height() as i32;
 
             let min_x = (x - r).max(0);
-            let max_x = (x + r).min(width - 1);
+            let max_x = (x + r).min(width_img - 1);
             let min_y = (y - r).max(0);
-            let max_y = (y + r).min(height - 1);
+            let max_y = (y + r).min(height_img - 1);
 
             let rect = Rect::from_min_max(
                 Pos2::new(min_x as f32, min_y as f32),
@@ -102,6 +97,7 @@ impl Tool for EllipseTool {
     fn update(
         &mut self,
         image: &mut ImageStore,
+        settings: &crate::state::ToolSettings,
         input: &ToolInput,
         color: Rgba<u8>,
     ) -> Option<Box<dyn Command>> {
@@ -116,7 +112,7 @@ impl Tool for EllipseTool {
             if let Some(pos) = input.pos {
                 self.current_pos = Some(pos);
                 if let Some(start) = self.start_pos {
-                    self.draw_ellipse_on_layer(start, pos, color);
+                    self.draw_ellipse_on_layer(start, pos, color, settings.line_width);
                 }
             }
         }
@@ -131,40 +127,52 @@ impl Tool for EllipseTool {
                 let h = rect.height() as u32;
                 let w = w.min(image.width() - x);
                 let h = h.min(image.height() - y);
+                let layer_index = image.active_layer;
+                let alpha_locked = image.layers[layer_index].alpha_locked;
 
-                if w > 0 && h > 0 {
-                    let old_patch = image.buffer.view(x, y, w, h).to_image();
-                    let layer_patch = self.layer.view(x, y, w, h).to_image();
+                if let Some(target_buffer) = image.get_active_raster_buffer_mut() {
+                    if w > 0 && h > 0 {
+                        let old_patch = target_buffer.view(x, y, w, h).to_image();
+                        let layer_patch = self.layer.view(x, y, w, h).to_image();
 
-                    for ly in 0..h {
-                        for lx in 0..w {
-                            let pixel = layer_patch.get_pixel(lx, ly);
-                            if pixel[3] > 0 {
-                                image.buffer.put_pixel(x + lx, y + ly, *pixel);
-                                self.layer.put_pixel(x + lx, y + ly, Rgba([0, 0, 0, 0]));
+                        for ly in 0..h {
+                            for lx in 0..w {
+                                let pixel = layer_patch.get_pixel(lx, ly);
+                                if pixel[3] > 0 {
+                                    let target_pixel = target_buffer.get_pixel(x + lx, y + ly);
+                                    if !alpha_locked || target_pixel[3] > 0 {
+                                        let mut final_pixel = *pixel;
+                                        if alpha_locked {
+                                            final_pixel[3] = target_pixel[3];
+                                        }
+                                        target_buffer.put_pixel(x + lx, y + ly, final_pixel);
+                                    }
+                                    self.layer.put_pixel(x + lx, y + ly, Rgba([0, 0, 0, 0]));
+                                }
                             }
                         }
+
+                        let new_patch = target_buffer.view(x, y, w, h).to_image();
+                        image.mark_dirty();
+                        self.start_pos = None;
+                        self.current_pos = None;
+                        self.dirty_rect = None;
+
+                        return Some(Box::new(PatchCommand {
+                            name: "Ellipse".to_string(),
+                            layer_index,
+                            x,
+                            y,
+                            old_patch,
+                            new_patch,
+                        }));
                     }
-
-                    let new_patch = image.buffer.view(x, y, w, h).to_image();
-                    self.start_pos = None;
-                    self.current_pos = None;
-                    self.dirty_rect = None;
-
-                    return Some(Box::new(PatchCommand {
-                        name: "Ellipse".to_string(),
-                        x,
-                        y,
-                        old_patch,
-                        new_patch,
-                    }));
                 }
             }
             self.start_pos = None;
             self.current_pos = None;
             self.dirty_rect = None;
         }
-
         None
     }
 
@@ -176,14 +184,24 @@ impl Tool for EllipseTool {
         }
     }
 
-    fn draw_cursor(&self, _ui: &mut Ui, painter: &Painter, pos: Pos2) {
-        painter.circle_filled(pos, 2.0, Color32::WHITE);
+    fn draw_cursor(
+        &self,
+        _ui: &mut Ui,
+        painter: &Painter,
+        settings: &crate::state::ToolSettings,
+        pos: Pos2,
+    ) {
+        painter.circle_stroke(
+            pos,
+            settings.line_width,
+            egui::Stroke::new(1.0, Color32::WHITE),
+        );
     }
 
-    fn configure(&mut self, ui: &mut Ui) {
+    fn configure(&mut self, ui: &mut Ui, settings: &mut crate::state::ToolSettings) {
         ui.horizontal(|ui| {
             ui.label("Width:");
-            ui.add(egui::DragValue::new(&mut self.width).range(1.0..=20.0));
+            ui.add(egui::DragValue::new(&mut settings.line_width).range(1.0..=20.0));
         });
     }
 }

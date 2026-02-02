@@ -1,5 +1,6 @@
 mod commands;
 mod image_store;
+mod layers;
 mod state;
 mod tools;
 mod ui;
