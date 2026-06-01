@@ -376,4 +376,6 @@ impl Tool for ShapeTool {
     }
 
     fn configure(&mut self, _ui: &mut Ui, _settings: &mut ToolSettings) {}
+
+    fn active_shape_kind(&self) -> Option<ShapeKind> { Some(self.kind) }
 }

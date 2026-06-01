@@ -213,36 +213,26 @@ impl ImageStore {
             let dst_pixel = *pixel;
             let dst_a = dst_pixel[3] as f32 / 255.0;
 
-            let (r, g, b) = match mode {
-                BlendMode::Normal => (
-                    src_pixel[0] as f32,
-                    src_pixel[1] as f32,
-                    src_pixel[2] as f32,
-                ),
-                BlendMode::Multiply => (
-                    (dst_pixel[0] as f32 * src_pixel[0] as f32) / 255.0,
-                    (dst_pixel[1] as f32 * src_pixel[1] as f32) / 255.0,
-                    (dst_pixel[2] as f32 * src_pixel[2] as f32) / 255.0,
-                ),
-                BlendMode::Add => (
-                    (dst_pixel[0] as f32 + src_pixel[0] as f32).min(255.0),
-                    (dst_pixel[1] as f32 + src_pixel[1] as f32).min(255.0),
-                    (dst_pixel[2] as f32 + src_pixel[2] as f32).min(255.0),
-                ),
-                BlendMode::Screen => {
-                    let inv_src_r = 1.0 - (src_pixel[0] as f32 / 255.0);
-                    let inv_dst_r = 1.0 - (dst_pixel[0] as f32 / 255.0);
-                    let inv_src_g = 1.0 - (src_pixel[1] as f32 / 255.0);
-                    let inv_dst_g = 1.0 - (dst_pixel[1] as f32 / 255.0);
-                    let inv_src_b = 1.0 - (src_pixel[2] as f32 / 255.0);
-                    let inv_dst_b = 1.0 - (dst_pixel[2] as f32 / 255.0);
+            let sf = |c: u8| c as f32 / 255.0;
+            let (sr, sg, sb) = (sf(src_pixel[0]), sf(src_pixel[1]), sf(src_pixel[2]));
+            let (dr, dg, db) = (sf(dst_pixel[0]), sf(dst_pixel[1]), sf(dst_pixel[2]));
 
-                    (
-                        (1.0 - (inv_src_r * inv_dst_r)) * 255.0,
-                        (1.0 - (inv_src_g * inv_dst_g)) * 255.0,
-                        (1.0 - (inv_src_b * inv_dst_b)) * 255.0,
-                    )
-                }
+            let overlay_ch = |s: f32, d: f32| -> f32 {
+                if d < 0.5 { 2.0 * s * d } else { 1.0 - 2.0 * (1.0 - s) * (1.0 - d) }
+            };
+            let soft_light_ch = |s: f32, d: f32| -> f32 {
+                if s < 0.5 { d - (1.0 - 2.0*s) * d * (1.0 - d) }
+                else { d + (2.0*s - 1.0) * (if d < 0.25 { ((16.0*d - 12.0)*d + 4.0)*d } else { d.sqrt() } - d) }
+            };
+
+            let (r, g, b) = match mode {
+                BlendMode::Normal   => (sr * 255.0, sg * 255.0, sb * 255.0),
+                BlendMode::Multiply => (sr * dr * 255.0, sg * dg * 255.0, sb * db * 255.0),
+                BlendMode::Add      => ((sr + dr).min(1.0) * 255.0, (sg + dg).min(1.0) * 255.0, (sb + db).min(1.0) * 255.0),
+                BlendMode::Screen   => ((1.0-(1.0-sr)*(1.0-dr))*255.0, (1.0-(1.0-sg)*(1.0-dg))*255.0, (1.0-(1.0-sb)*(1.0-db))*255.0),
+                BlendMode::Overlay  => (overlay_ch(sr,dr)*255.0, overlay_ch(sg,dg)*255.0, overlay_ch(sb,db)*255.0),
+                BlendMode::SoftLight=> (soft_light_ch(sr,dr)*255.0, soft_light_ch(sg,dg)*255.0, soft_light_ch(sb,db)*255.0),
+                BlendMode::Difference => ((sr-dr).abs()*255.0, (sg-dg).abs()*255.0, (sb-db).abs()*255.0),
             };
 
             let out_a = src_a + dst_a * (1.0 - src_a);
@@ -417,6 +407,34 @@ impl ImageStore {
         self.height = h;
         self.selection = None;
         self.composite = ImageBuffer::new(w, h);
+        self.mark_dirty();
+    }
+
+    pub fn merge_down(&mut self) {
+        let idx = self.active_layer;
+        if idx == 0 || self.layers.len() < 2 { return; }
+
+        // composite active layer onto the one below
+        let above = self.layers[idx].clone();
+        let below = &mut self.layers[idx - 1];
+
+        if let (LayerData::Raster(src), LayerData::Raster(dst)) = (&above.data, &mut below.data) {
+            for (x, y, sp) in src.enumerate_pixels() {
+                if sp[3] == 0 { continue; }
+                let src_a = (sp[3] as f32 / 255.0) * above.opacity;
+                let dp = dst.get_pixel(x, y);
+                let dst_a = dp[3] as f32 / 255.0;
+                let out_a = src_a + dst_a * (1.0 - src_a);
+                if out_a == 0.0 { continue; }
+                let blend = |s: u8, d: u8| -> u8 {
+                    ((s as f32 * src_a + d as f32 * dst_a * (1.0 - src_a)) / out_a).clamp(0.0, 255.0) as u8
+                };
+                dst.put_pixel(x, y, image::Rgba([blend(sp[0],dp[0]),blend(sp[1],dp[1]),blend(sp[2],dp[2]),(out_a*255.0) as u8]));
+            }
+        }
+
+        self.layers.remove(idx);
+        self.active_layer = idx - 1;
         self.mark_dirty();
     }
 

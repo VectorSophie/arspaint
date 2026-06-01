@@ -49,4 +49,8 @@ impl Tool for EyedropperTool {
     }
 
     fn configure(&mut self, _ui: &mut Ui, _settings: &mut crate::state::ToolSettings) {}
+
+    fn picked_color(&self) -> Option<image::Rgba<u8>> {
+        self.picked.map(|(c, _)| c)
+    }
 }

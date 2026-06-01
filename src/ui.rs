@@ -15,9 +15,6 @@ use image::{GenericImage, GenericImageView, ImageBuffer, Rgba, RgbaImage};
 #[derive(PartialEq, Clone, Copy)]
 enum RibbonTab { Home, View }
 
-#[derive(PartialEq, Clone, Copy)]
-enum SelectDropdown { Rect, Lasso, All }
-
 pub struct ArsApp {
     state: AppState,
     base_texture: Option<egui::TextureHandle>,
@@ -29,6 +26,7 @@ pub struct ArsApp {
     ribbon_tab: RibbonTab,
     show_grid: bool,
     show_status_bar: bool,
+    show_layers_panel: bool,
     cursor_pos: Option<Pos2>,
     // dialogs
     show_resize_dialog: bool,
@@ -67,6 +65,7 @@ impl ArsApp {
             ribbon_tab: RibbonTab::Home,
             show_grid: false,
             show_status_bar: true,
+            show_layers_panel: true,
             cursor_pos: None,
             show_resize_dialog: false,
             resize_w: w,
@@ -104,16 +103,13 @@ impl ArsApp {
             self.layer_texture = None;
         }
 
-        // floating selection overlay
+        // floating selection — upload as its own texture always
         if let Some(fs) = &self.state.floating_selection {
             let ci = egui::ColorImage::from_rgba_unmultiplied(
                 [fs.image.width() as usize, fs.image.height() as usize],
                 fs.image.as_raw(),
             );
-            // reuse layer_texture slot for floating selection when no tool temp layer
-            if self.layer_texture.is_none() {
-                self.layer_texture = Some(ctx.load_texture("float_sel", ci, TextureOptions::NEAREST));
-            }
+            self.layer_texture = Some(ctx.load_texture("float_sel", ci, TextureOptions::NEAREST));
         }
 
         if let Some(mask) = &self.state.image.selection {
@@ -250,7 +246,8 @@ impl ArsApp {
                 if cr { self.state.active_tool = Box::new(RectangleTool::new(img_w, img_h)); }
                 if ce { self.state.active_tool = Box::new(EllipseTool::new(img_w, img_h)); }
 
-                let shape_clicks: Vec<(ShapeKind, bool)> = ui.horizontal(|ui| {
+                let cur_shape = self.shape_kind();
+                let shape_clicks: Vec<(ShapeKind, bool)> = ui.horizontal_wrapped(|ui| {
                     [
                         (ShapeKind::RightTriangle,"◺"),(ShapeKind::Pentagon,"⬠"),
                         (ShapeKind::Hexagon,"⬡"),(ShapeKind::ArrowRight,"➡"),
@@ -262,7 +259,7 @@ impl ArsApp {
                         (ShapeKind::CalloutCloud,"☁"),(ShapeKind::Heart,"♥"),
                         (ShapeKind::Polygon,"⬡̣"),
                     ].iter().map(|(kind, label)| {
-                        (*kind, ui.selectable_label(false, *label).on_hover_text(format!("{:?}", kind)).clicked())
+                        (*kind, ui.selectable_label(cur_shape == Some(*kind), *label).on_hover_text(format!("{:?}", kind)).clicked())
                     }).collect()
                 }).inner;
                 for (kind, clicked) in shape_clicks {
@@ -283,23 +280,31 @@ impl ArsApp {
             // ── Colors ──
             ui.vertical(|ui| {
                 ui.label(egui::RichText::new("Colors").small().color(Color32::GRAY));
-                ui.horizontal(|ui| {
-                    // Color 1 swatch
-                    let c1 = self.state.color1;
-                    let c1_32 = Color32::from_rgba_unmultiplied(c1[0], c1[1], c1[2], 255);
-                    let (r1, resp1) = ui.allocate_at_least(Vec2::splat(20.0), Sense::click());
-                    ui.painter().rect_filled(r1, 3.0, c1_32);
-                    ui.painter().rect_stroke(r1, 3.0, egui::Stroke::new(1.0, Color32::WHITE));
-                    if resp1.clicked() {
-                        // open egui color picker for color1 — handled below via show_color1_picker
-                    }
 
-                    // Color 2 swatch
-                    let c2 = self.state.color2;
-                    let c2_32 = Color32::from_rgba_unmultiplied(c2[0], c2[1], c2[2], 255);
-                    let (r2, _resp2) = ui.allocate_at_least(Vec2::splat(20.0), Sense::click());
-                    ui.painter().rect_filled(r2, 3.0, c2_32);
-                    ui.painter().rect_stroke(r2, 3.0, egui::Stroke::new(1.0, Color32::GRAY));
+                // Stacked Color 2 behind Color 1 (Paint-style)
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        // Color 2 (background) — bottom swatch
+                        let c2 = self.state.color2;
+                        let mut c2_arr = [c2[0], c2[1], c2[2]];
+                        ui.label(egui::RichText::new("2").small().color(Color32::GRAY));
+                        if ui.color_edit_button_srgb(&mut c2_arr).changed() {
+                            self.state.color2 = Rgba([c2_arr[0], c2_arr[1], c2_arr[2], 255]);
+                        }
+                    });
+                    ui.vertical(|ui| {
+                        // Color 1 (foreground) — top swatch
+                        let c1 = self.state.color1;
+                        let mut c1_arr = [c1[0], c1[1], c1[2]];
+                        ui.label(egui::RichText::new("1").small().color(Color32::GRAY));
+                        if ui.color_edit_button_srgb(&mut c1_arr).changed() {
+                            self.state.color1 = Rgba([c1_arr[0], c1_arr[1], c1_arr[2], 255]);
+                        }
+                    });
+                    // Swap button
+                    if ui.button("⇄").on_hover_text("Swap colors").clicked() {
+                        std::mem::swap(&mut self.state.color1, &mut self.state.color2);
+                    }
                 });
 
                 // 20-color palette (2 rows of 10)
@@ -313,20 +318,6 @@ impl ArsApp {
                         if resp.secondary_clicked() { self.state.color2 = *color; }
                     }
                 });
-
-                // Color 1/2 raw editors
-                ui.horizontal(|ui| {
-                    let mut c1 = [self.state.color1[0], self.state.color1[1], self.state.color1[2]];
-                    if ui.color_edit_button_srgb(&mut c1).changed() {
-                        self.state.color1 = Rgba([c1[0], c1[1], c1[2], 255]);
-                    }
-                    ui.label("1");
-                    let mut c2 = [self.state.color2[0], self.state.color2[1], self.state.color2[2]];
-                    if ui.color_edit_button_srgb(&mut c2).changed() {
-                        self.state.color2 = Rgba([c2[0], c2[1], c2[2], 255]);
-                    }
-                    ui.label("2");
-                });
             });
         });
     }
@@ -339,9 +330,6 @@ impl ArsApp {
                     if ui.button("＋").clicked() { self.zoom = (self.zoom * 1.25).min(50.0); }
                     if ui.button("－").clicked() { self.zoom = (self.zoom / 1.25).max(0.1); }
                     if ui.button("100%").clicked() { self.zoom = 1.0; }
-                    if ui.button("Fit").clicked() {
-                        // zoom handled in canvas
-                    }
                 });
             });
             ui.separator();
@@ -349,7 +337,156 @@ impl ArsApp {
                 ui.label(egui::RichText::new("Show or hide").small().color(Color32::GRAY));
                 ui.checkbox(&mut self.show_grid, "Gridlines");
                 ui.checkbox(&mut self.show_status_bar, "Status bar");
+                ui.checkbox(&mut self.show_layers_panel, "Layers");
             });
+        });
+    }
+
+    fn render_layers_panel(&mut self, ui: &mut Ui) {
+        ui.heading("Layers");
+        ui.separator();
+
+        ui.horizontal(|ui| {
+            if ui.button("＋").on_hover_text("Add raster layer").clicked() {
+                let (w, h) = (self.state.image.width(), self.state.image.height());
+                let n = self.state.image.layers.len() + 1;
+                self.state.image.add_layer(Layer::new_raster(w, h, format!("Layer {}", n)));
+                self.image_dirty = true;
+            }
+            let can_delete = self.state.image.layers.len() > 1;
+            if ui.add_enabled(can_delete, egui::Button::new("✕")).on_hover_text("Delete layer").clicked() {
+                let idx = self.state.image.active_layer;
+                self.state.image.layers.remove(idx);
+                self.state.image.active_layer = idx.saturating_sub(1).min(self.state.image.layers.len() - 1);
+                self.state.image.mark_dirty();
+                self.image_dirty = true;
+            }
+            let can_up = self.state.image.active_layer + 1 < self.state.image.layers.len();
+            if ui.add_enabled(can_up, egui::Button::new("↑")).on_hover_text("Move up").clicked() {
+                let idx = self.state.image.active_layer;
+                self.state.image.layers.swap(idx, idx + 1);
+                self.state.image.active_layer = idx + 1;
+                self.state.image.mark_dirty();
+                self.image_dirty = true;
+            }
+            let can_down = self.state.image.active_layer > 0;
+            if ui.add_enabled(can_down, egui::Button::new("↓")).on_hover_text("Move down").clicked() {
+                let idx = self.state.image.active_layer;
+                self.state.image.layers.swap(idx, idx - 1);
+                self.state.image.active_layer = idx - 1;
+                self.state.image.mark_dirty();
+                self.image_dirty = true;
+            }
+            if ui.button("⎘").on_hover_text("Duplicate layer").clicked() {
+                let idx = self.state.image.active_layer;
+                let clone = self.state.image.layers[idx].clone();
+                self.state.image.layers.insert(idx + 1, clone);
+                self.state.image.active_layer = idx + 1;
+                self.state.image.mark_dirty();
+                self.image_dirty = true;
+            }
+            let can_merge = self.state.image.active_layer > 0;
+            if ui.add_enabled(can_merge, egui::Button::new("⇩")).on_hover_text("Merge down").clicked() {
+                self.state.image.merge_down();
+                self.image_dirty = true;
+            }
+        });
+
+        ui.separator();
+
+        let n = self.state.image.layers.len();
+        let indices: Vec<usize> = (0..n).rev().collect();
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for idx in indices {
+                let is_active = idx == self.state.image.active_layer;
+
+                let frame_color = if is_active {
+                    Color32::from_rgb(40, 52, 87)
+                } else {
+                    Color32::TRANSPARENT
+                };
+
+                egui::Frame::none().fill(frame_color).inner_margin(4.0).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        // Visibility eye
+                        let vis = self.state.image.layers[idx].visible;
+                        let eye = if vis { "👁" } else { "  " };
+                        if ui.small_button(eye).clicked() {
+                            self.state.image.layers[idx].visible = !vis;
+                            self.state.image.mark_dirty();
+                            self.image_dirty = true;
+                        }
+
+                        // Alpha lock
+                        let al = self.state.image.layers[idx].alpha_locked;
+                        if ui.selectable_label(al, "🔒").on_hover_text("Lock alpha").clicked() {
+                            self.state.image.layers[idx].alpha_locked = !al;
+                        }
+
+                        // Clip to below
+                        let clip = self.state.image.layers[idx].clipped;
+                        if ui.selectable_label(clip, "🖇").on_hover_text("Clip to layer below").clicked() {
+                            self.state.image.layers[idx].clipped = !clip;
+                            self.state.image.mark_dirty();
+                            self.image_dirty = true;
+                        }
+
+                        let name = self.state.image.layers[idx].name.clone();
+                        if ui.selectable_label(is_active, &name).clicked() {
+                            self.state.image.active_layer = idx;
+                        }
+                    });
+
+                    if is_active {
+                        ui.horizontal(|ui| {
+                            ui.label("Opacity");
+                            let mut op = self.state.image.layers[idx].opacity;
+                            if ui.add(egui::Slider::new(&mut op, 0.0..=1.0).show_value(false)).changed() {
+                                self.state.image.layers[idx].opacity = op;
+                                self.state.image.mark_dirty();
+                                self.image_dirty = true;
+                            }
+                            ui.label(format!("{:.0}%", self.state.image.layers[idx].opacity * 100.0));
+                        });
+
+                        let mut blend = self.state.image.layers[idx].blend;
+                        egui::ComboBox::from_id_source(format!("blend_{}", idx))
+                            .selected_text(format!("{:?}", blend))
+                            .show_ui(ui, |ui| {
+                                use crate::layers::BlendMode;
+                                for mode in [
+                                    BlendMode::Normal, BlendMode::Multiply, BlendMode::Add,
+                                    BlendMode::Screen, BlendMode::Overlay, BlendMode::SoftLight,
+                                    BlendMode::Difference,
+                                ] {
+                                    if ui.selectable_value(&mut blend, mode, format!("{:?}", mode)).clicked() {
+                                        self.state.image.layers[idx].blend = blend;
+                                        self.state.image.mark_dirty();
+                                        self.image_dirty = true;
+                                    }
+                                }
+                            });
+                    }
+                });
+            }
+        });
+
+        ui.separator();
+        // Brush opacity (Phase D)
+        ui.horizontal(|ui| {
+            ui.label("Brush opacity");
+            ui.add(egui::Slider::new(&mut self.state.tool_settings.brush_opacity, 0.01..=1.0).show_value(false));
+            ui.label(format!("{:.0}%", self.state.tool_settings.brush_opacity * 100.0));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Brush size");
+            ui.add(egui::Slider::new(&mut self.state.tool_settings.brush_size, 1.0..=200.0).show_value(false));
+            ui.label(format!("{:.0}px", self.state.tool_settings.brush_size));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Smoothing");
+            ui.add(egui::Slider::new(&mut self.state.tool_settings.brush_stabilization, 0.0..=0.95).show_value(false));
         });
     }
 
@@ -519,9 +656,24 @@ impl ArsApp {
         if let Some(tex) = &self.base_texture {
             painter.image(tex.id(), image_rect, uv, Color32::WHITE);
         }
-        if let Some(tex) = &self.layer_texture {
+
+        // Draw floating selection at its canvas position
+        if let Some(fs) = &self.state.floating_selection {
+            if let Some(tex) = &self.layer_texture {
+                let fw = fs.image.width() as f32 * self.zoom;
+                let fh = fs.image.height() as f32 * self.zoom;
+                let fx = image_rect.min.x + fs.pos.x * self.zoom;
+                let fy = image_rect.min.y + fs.pos.y * self.zoom;
+                let fs_rect = Rect::from_min_size(Pos2::new(fx, fy), Vec2::new(fw, fh));
+                painter.image(tex.id(), fs_rect, uv, Color32::WHITE);
+                // dashed border around floating selection
+                painter.rect_stroke(fs_rect, 0.0, egui::Stroke::new(1.0, Color32::from_rgba_unmultiplied(100, 180, 255, 200)));
+            }
+        } else if let Some(tex) = &self.layer_texture {
+            // tool temp layer (brush stroke in progress etc.)
             painter.image(tex.id(), image_rect, uv, Color32::WHITE);
         }
+
         if let Some(tex) = &self.selection_texture {
             painter.image(tex.id(), image_rect, uv, Color32::WHITE);
         }
@@ -635,7 +787,10 @@ impl ArsApp {
             if do_eye     { self.state.active_tool = Box::new(EyedropperTool::new()); }
             if do_airbrush{ self.state.active_tool = Box::new(AirbrushTool::new(img_w, img_h)); }
             if do_select  { self.state.active_tool = Box::new(RectSelectionTool::new()); }
-            if do_escape  { self.state.image.selection = None; self.state.floating_selection = None; }
+            if do_escape  {
+                self.stamp_floating_selection();
+                self.state.image.selection = None;
+            }
             if do_delete  { self.do_delete_selection(); }
 
             // Tool update
@@ -665,20 +820,36 @@ impl ArsApp {
 
             let draw_color = if is_right { self.state.color2 } else { self.state.color1 };
 
-            // Handle eyedropper picks
-            let cmd = self.state.active_tool.update(
-                &mut self.state.image,
-                &self.state.tool_settings,
-                &input,
-                draw_color,
-            );
+            // Floating selection drag takes priority over tool
+            let has_float = self.state.floating_selection.is_some();
+            if has_float && input.is_pressed {
+                if let Some(pos) = input.pos {
+                    if let Some(fs) = &mut self.state.floating_selection {
+                        let fs_rect = Rect::from_min_size(fs.pos, Vec2::new(
+                            fs.image.width() as f32, fs.image.height() as f32,
+                        ));
+                        if fs_rect.contains(pos) {
+                            let drag = response.drag_delta() / self.zoom;
+                            fs.pos += drag;
+                        }
+                    }
+                }
+                if input.is_released { self.stamp_floating_selection(); }
+            }
 
-            // Check eyedropper result
-            if let Some(eyedrop) = self.state.active_tool.as_any_eyedropper() {
-                if let Some((picked, _)) = eyedrop.picked {
+            let cmd = if !has_float {
+                let c = self.state.active_tool.update(
+                    &mut self.state.image,
+                    &self.state.tool_settings,
+                    &input,
+                    draw_color,
+                );
+                // Eyedropper: apply picked color
+                if let Some(picked) = self.state.active_tool.picked_color() {
                     if is_right { self.state.color2 = picked; } else { self.state.color1 = picked; }
                 }
-            }
+                c
+            } else { None };
 
             if let Some(c) = cmd {
                 self.state.command_stack.push(c);
@@ -714,9 +885,7 @@ impl ArsApp {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     fn shape_kind(&self) -> Option<ShapeKind> {
-        // Downcast is not available on Box<dyn Tool> without an as_any pattern;
-        // use name-based heuristic since ShapeTool always reports "Shape"
-        None // TODO: expose shape kind via Tool trait extension if needed
+        self.state.active_tool.active_shape_kind()
     }
 
     fn set_tool_pencil(&mut self) {
@@ -739,6 +908,30 @@ impl ArsApp {
             "Line"   => Box::new(LineTool::new(w, h)),
             _ => Box::new(PencilTool::new(w, h)),
         };
+    }
+
+    fn stamp_floating_selection(&mut self) {
+        if let Some(fs) = self.state.floating_selection.take() {
+            let x = fs.pos.x as i32;
+            let y = fs.pos.y as i32;
+            let iw = self.state.image.width() as i32;
+            let ih = self.state.image.height() as i32;
+            if let Some(buf) = self.state.image.get_active_raster_buffer_mut() {
+                for py in 0..fs.image.height() as i32 {
+                    for px in 0..fs.image.width() as i32 {
+                        let tx = x + px;
+                        let ty = y + py;
+                        if tx >= 0 && tx < iw && ty >= 0 && ty < ih {
+                            use image::GenericImageView;
+                            let p = *fs.image.get_pixel(px as u32, py as u32);
+                            if p[3] > 0 { buf.put_pixel(tx as u32, ty as u32, p); }
+                        }
+                    }
+                }
+            }
+            self.state.image.mark_dirty();
+            self.image_dirty = true;
+        }
     }
 
     fn do_select_all(&mut self) {
@@ -850,15 +1043,6 @@ impl ArsApp {
     }
 }
 
-// Trait extension to let ui.rs query the EyedropperTool without full downcast
-pub trait AsEyedropper {
-    fn as_any_eyedropper(&self) -> Option<&crate::tools::EyedropperTool>;
-}
-
-impl<T: crate::tools::Tool + ?Sized> AsEyedropper for Box<T> {
-    fn as_any_eyedropper(&self) -> Option<&crate::tools::EyedropperTool> { None }
-}
-
 impl eframe::App for ArsApp {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
         self.update_textures(ctx);
@@ -871,6 +1055,12 @@ impl eframe::App for ArsApp {
         if self.show_status_bar {
             egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
                 self.render_status_bar(ui);
+            });
+        }
+
+        if self.show_layers_panel {
+            egui::SidePanel::right("layers_panel").min_width(180.0).show(ctx, |ui| {
+                self.render_layers_panel(ui);
             });
         }
 

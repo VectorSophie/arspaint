@@ -8,6 +8,9 @@ pub enum BlendMode {
     Multiply,
     Add,
     Screen,
+    Overlay,
+    SoftLight,
+    Difference,
 }
 
 #[derive(Clone, Debug)]

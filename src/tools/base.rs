@@ -31,6 +31,12 @@ pub trait Tool {
     );
 
     fn configure(&mut self, ui: &mut Ui, settings: &mut crate::state::ToolSettings);
+
+    /// Returns the last picked color (eyedropper only).
+    fn picked_color(&self) -> Option<Rgba<u8>> { None }
+
+    /// Returns the active shape kind (ShapeTool only).
+    fn active_shape_kind(&self) -> Option<crate::tools::shapes::ShapeKind> { None }
 }
 
 pub struct BrushTool {
@@ -39,6 +45,7 @@ pub struct BrushTool {
     last_pos: Option<Pos2>,
     stabilized_pos: Option<Pos2>,
     dirty_rect: Option<Rect>,
+    last_speed: f32,
 }
 
 impl BrushTool {
@@ -47,6 +54,7 @@ impl BrushTool {
             texture: None,
             layer: ImageBuffer::new(width, height),
             last_pos: None,
+            last_speed: 0.0,
             stabilized_pos: None,
             dirty_rect: None,
         }
@@ -172,26 +180,29 @@ impl Tool for BrushTool {
             if let Some(target_pos) = input.pos {
                 let current_stabilized = if let Some(last_s) = self.stabilized_pos {
                     let weight = settings.brush_stabilization.clamp(0.0, 0.95);
-                    let smoothed_x = last_s.x * weight + target_pos.x * (1.0 - weight);
-                    let smoothed_y = last_s.y * weight + target_pos.y * (1.0 - weight);
-                    Pos2::new(smoothed_x, smoothed_y)
+                    Pos2::new(
+                        last_s.x * weight + target_pos.x * (1.0 - weight),
+                        last_s.y * weight + target_pos.y * (1.0 - weight),
+                    )
                 } else {
                     target_pos
                 };
 
+                // Speed-based size: fast strokes thin the brush (simulated pressure)
+                let speed = self.last_pos
+                    .map(|lp| lp.distance(current_stabilized))
+                    .unwrap_or(0.0);
+                self.last_speed = self.last_speed * 0.7 + speed * 0.3;
+                let speed_factor = (1.0 - (self.last_speed / 40.0).min(1.0) * 0.5).max(0.2);
+                let dynamic_size = settings.brush_size * speed_factor;
+
                 if let Some(last) = self.last_pos {
-                    self.draw_segment(
-                        last,
-                        current_stabilized,
-                        color,
-                        settings.brush_size,
-                        settings.brush_spacing,
-                    );
+                    self.draw_segment(last, current_stabilized, color, dynamic_size, settings.brush_spacing);
                 } else {
                     if self.texture.is_some() {
-                        self.draw_texture_stamp(current_stabilized, color, settings.brush_size);
+                        self.draw_texture_stamp(current_stabilized, color, dynamic_size);
                     } else {
-                        self.draw_circle(current_stabilized, color, settings.brush_size);
+                        self.draw_circle(current_stabilized, color, dynamic_size);
                     }
                 }
 
@@ -201,6 +212,7 @@ impl Tool for BrushTool {
         } else {
             self.last_pos = None;
             self.stabilized_pos = None;
+            self.last_speed = 0.0;
         }
 
         if input.is_released {
@@ -227,26 +239,33 @@ impl Tool for BrushTool {
                     if w > 0 && h > 0 {
                         let old_patch = target_buffer.view(x, y, w, h).to_image();
                         let layer_patch = self.layer.view(x, y, w, h).to_image();
+                        let opacity = settings.brush_opacity.clamp(0.0, 1.0);
                         for ly in 0..h {
                             for lx in 0..w {
                                 let pixel = layer_patch.get_pixel(lx, ly);
                                 if pixel[3] > 0 {
-                                    let mut selected = true;
-                                    if let Some(mask) = selection {
-                                        let mask_val = mask.get_pixel(x + lx, y + ly)[0];
-                                        if mask_val == 0 {
-                                            selected = false;
-                                        }
-                                    }
-
-                                    if selected {
-                                        let target_pixel = target_buffer.get_pixel(x + lx, y + ly);
-                                        if !alpha_locked || target_pixel[3] > 0 {
-                                            let mut final_pixel = *pixel;
-                                            if alpha_locked {
-                                                final_pixel[3] = target_pixel[3];
-                                            }
-                                            target_buffer.put_pixel(x + lx, y + ly, final_pixel);
+                                    let in_sel = selection.as_ref()
+                                        .map(|m| m.get_pixel(x + lx, y + ly)[0] > 0)
+                                        .unwrap_or(true);
+                                    if in_sel {
+                                        let dst = target_buffer.get_pixel(x + lx, y + ly);
+                                        if !alpha_locked || dst[3] > 0 {
+                                            // alpha-blend with opacity
+                                            let src_a = (pixel[3] as f32 / 255.0) * opacity;
+                                            let dst_a = dst[3] as f32 / 255.0;
+                                            let out_a = src_a + dst_a * (1.0 - src_a);
+                                            let blend = |s: u8, d: u8| -> u8 {
+                                                if out_a == 0.0 { return 0; }
+                                                ((s as f32 * src_a + d as f32 * dst_a * (1.0 - src_a)) / out_a)
+                                                    .clamp(0.0, 255.0) as u8
+                                            };
+                                            let out_alpha = if alpha_locked { dst[3] } else { (out_a * 255.0) as u8 };
+                                            target_buffer.put_pixel(x + lx, y + ly, Rgba([
+                                                blend(pixel[0], dst[0]),
+                                                blend(pixel[1], dst[1]),
+                                                blend(pixel[2], dst[2]),
+                                                out_alpha,
+                                            ]));
                                         }
                                     }
                                     self.layer.put_pixel(x + lx, y + ly, Rgba([0, 0, 0, 0]));

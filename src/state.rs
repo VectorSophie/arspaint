@@ -39,6 +39,7 @@ pub struct ToolSettings {
     pub brush_size: f32,
     pub brush_stabilization: f32,
     pub brush_spacing: f32,
+    pub brush_opacity: f32,   // 0.0–1.0, Phase D
     pub airbrush_radius: f32,
     pub text_font_size: f32,
     pub text_bold: bool,
@@ -56,6 +57,7 @@ impl Default for ToolSettings {
             brush_size: 5.0,
             brush_stabilization: 0.5,
             brush_spacing: 0.1,
+            brush_opacity: 1.0,
             airbrush_radius: 20.0,
             text_font_size: 16.0,
             text_bold: false,
