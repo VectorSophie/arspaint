@@ -1,0 +1,93 @@
+<h2>How closely do we match Paint's ribbon UI?</h2>
+<p class="subtitle">egui (the GUI framework ArsPaint uses) is immediate-mode — it doesn't have a ribbon widget. We have to build or fake it. Three approaches:</p>
+
+<div class="options">
+
+  <div class="option" data-choice="ribbon" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Build a real ribbon — Home / View tabs</h3>
+      <p>Faithful layout: tab bar, grouped sections (Clipboard · Image · Tools · Shapes · Colors), icons + labels, shape gallery with scroll. Looks like modern Paint. More work up front, but the muscle memory will transfer directly.</p>
+      <div style="margin-top:10px;background:#f3f3f3;border:1px solid #ccc;font-family:sans-serif;font-size:0.72em;color:#111">
+        <div style="background:#fff;border-bottom:1px solid #ddd;padding:0 8px;display:flex;gap:0">
+          <div style="padding:4px 10px;border-bottom:2px solid #0078d4;color:#0078d4;font-weight:bold">Home</div>
+          <div style="padding:4px 10px;color:#555">View</div>
+        </div>
+        <div style="padding:4px 8px;display:flex;gap:0;align-items:stretch;border-bottom:1px solid #ddd">
+          <div style="padding:2px 8px;border-right:1px solid #ddd;text-align:center">
+            <div style="font-size:1.6em">📋</div><div style="color:#555">Paste</div>
+          </div>
+          <div style="padding:2px 8px;border-right:1px solid #ddd">
+            <div style="display:flex;gap:6px;align-items:center">
+              <div style="text-align:center"><div>⬚</div><div style="color:#555">Select</div></div>
+              <div style="text-align:center"><div>✂</div><div style="color:#555">Crop</div></div>
+              <div style="text-align:center"><div>⇲</div><div style="color:#555">Resize</div></div>
+            </div>
+          </div>
+          <div style="padding:2px 8px;border-right:1px solid #ddd">
+            <div style="display:flex;gap:6px">
+              <div style="text-align:center"><div>✏</div><div style="color:#555">Pencil</div></div>
+              <div style="text-align:center"><div>🪣</div><div style="color:#555">Fill</div></div>
+              <div style="text-align:center"><div>💧</div><div style="color:#555">Pick</div></div>
+              <div style="text-align:center"><div>A</div><div style="color:#555">Text</div></div>
+              <div style="text-align:center"><div>⬜</div><div style="color:#555">Eraser</div></div>
+            </div>
+          </div>
+          <div style="padding:2px 8px;border-right:1px solid #ddd;flex:1">
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <div style="border:1px solid #999;padding:1px 4px">╱</div>
+              <div style="border:1px solid #999;padding:1px 4px">▭</div>
+              <div style="border:1px solid #999;padding:1px 4px">◯</div>
+              <div style="border:1px solid #999;padding:1px 4px">△</div>
+              <div style="border:1px solid #999;padding:1px 4px">⬡</div>
+              <div style="border:1px solid #999;padding:1px 4px">★</div>
+            </div>
+          </div>
+          <div style="padding:2px 8px;display:flex;gap:4px;align-items:center">
+            <div style="text-align:center">
+              <div style="display:flex;gap:2px">
+                <div style="width:18px;height:18px;background:#000;border:1px solid #999"></div>
+                <div style="width:18px;height:18px;background:#fff;border:1px solid #999"></div>
+              </div>
+              <div style="color:#555;margin-top:2px">Color 1/2</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(10,14px);gap:1px">
+              <div style="width:13px;height:13px;background:#000"></div>
+              <div style="width:13px;height:13px;background:#7f7f7f"></div>
+              <div style="width:13px;height:13px;background:#880015"></div>
+              <div style="width:13px;height:13px;background:#ed1c24"></div>
+              <div style="width:13px;height:13px;background:#ff7f27"></div>
+              <div style="width:13px;height:13px;background:#fff200"></div>
+              <div style="width:13px;height:13px;background:#22b14c"></div>
+              <div style="width:13px;height:13px;background:#00a2e8"></div>
+              <div style="width:13px;height:13px;background:#3f48cc"></div>
+              <div style="width:13px;height:13px;background:#a349a4"></div>
+              <div style="width:13px;height:13px;background:#fff"></div>
+              <div style="width:13px;height:13px;background:#c3c3c3"></div>
+              <div style="width:13px;height:13px;background:#b97a57"></div>
+              <div style="width:13px;height:13px;background:#ffaec9"></div>
+              <div style="width:13px;height:13px;background:#ffc90e"></div>
+              <div style="width:13px;height:13px;background:#efe4b0"></div>
+              <div style="width:13px;height:13px;background:#b5e61d"></div>
+              <div style="width:13px;height:13px;background:#99d9ea"></div>
+              <div style="width:13px;height:13px;background:#7092be"></div>
+              <div style="width:13px;height:13px;background:#c8bfe7"></div>
+            </div>
+          </div>
+        </div>
+        <div style="background:#fff;height:55px;border:1px solid #ddd;margin:4px;display:flex;align-items:center;justify-content:center;color:#aaa">canvas</div>
+        <div style="padding:2px 6px;background:#f3f3f3;border-top:1px solid #ddd;color:#666;font-size:0.9em">320×240px &nbsp;|&nbsp; 100% &nbsp;|&nbsp; ——— zoom slider</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="toolbar" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Two-row toolbar — same tools, simpler layout</h3>
+      <p>All the same tools and groups as modern Paint, but laid out as a compact two-row horizontal toolbar (like ArsPaint has now, just expanded). No tab switching. Tools work identically — just less chrome. Gets us working faster, and we can skin it later.</p>
+      <p style="margin-top:6px;font-size:0.85em;opacity:0.65;">Good middle ground: behavior-faithful, UI-pragmatic. egui handles this naturally without custom widget work.</p>
+    </div>
+  </div>
+
+</div>

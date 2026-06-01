@@ -378,11 +378,11 @@ impl EraserTool {
         );
         self.expand_dirty_rect(rect);
 
-        let color = Rgba([255, 255, 255, 128]);
+        let erase_color = Rgba([255, 255, 255, 128]);
         for cy in min_y..=max_y {
             for cx in min_x..=max_x {
                 if (cx - x) * (cx - x) + (cy - y) * (cy - y) <= r_sq {
-                    self.layer.put_pixel(cx as u32, cy as u32, color);
+                    self.layer.put_pixel(cx as u32, cy as u32, erase_color);
                 }
             }
         }
@@ -399,7 +399,7 @@ impl Tool for EraserTool {
         image: &mut ImageStore,
         settings: &crate::state::ToolSettings,
         input: &ToolInput,
-        _color: Rgba<u8>,
+        color: Rgba<u8>,
     ) -> Option<Box<dyn Command>> {
         if self.layer.width() != image.width() || self.layer.height() != image.height() {
             self.layer = ImageBuffer::new(image.width(), image.height());
@@ -455,11 +455,10 @@ impl Tool for EraserTool {
                                     }
 
                                     if selected {
-                                        let white = Rgba([255, 255, 255, 255]);
                                         let target_pixel = target_buffer.get_pixel(x + lx, y + ly);
 
                                         if !alpha_locked || target_pixel[3] > 0 {
-                                            target_buffer.put_pixel(x + lx, y + ly, white);
+                                            target_buffer.put_pixel(x + lx, y + ly, color);
                                         }
                                     }
                                     self.layer.put_pixel(x + lx, y + ly, Rgba([0, 0, 0, 0]));

@@ -1,12 +1,23 @@
+pub mod airbrush;
 pub mod base;
+pub mod curve;
 pub mod ellipse;
+pub mod eyedropper;
+pub mod fill;
+pub mod pencil;
 pub mod rect;
 pub mod selection;
+pub mod shapes;
 pub mod transform;
 
-// Re-export core traits and structs
+pub use airbrush::AirbrushTool;
 pub use base::{BrushTool, EraserTool, LineTool, Tool, ToolInput};
+pub use curve::CurveTool;
 pub use ellipse::EllipseTool;
+pub use eyedropper::EyedropperTool;
+pub use fill::FillTool;
+pub use pencil::PencilTool;
 pub use rect::RectangleTool;
 pub use selection::{LassoSelectionTool, RectSelectionTool};
+pub use shapes::{ShapeKind, ShapeTool};
 pub use transform::TransformTool;

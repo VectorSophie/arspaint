@@ -346,4 +346,87 @@ impl ImageStore {
         self.composite = ImageBuffer::new(new_width, new_height);
         self.mark_dirty();
     }
+
+    pub fn resize_scaled(&mut self, new_width: u32, new_height: u32) {
+        if let Some(buf) = self.get_active_raster_buffer_mut() {
+            let src = image::imageops::resize(buf, new_width, new_height, image::imageops::FilterType::Nearest);
+            *buf = src;
+        }
+        self.width = new_width;
+        self.height = new_height;
+        self.composite = ImageBuffer::new(new_width, new_height);
+        self.mark_dirty();
+    }
+
+    pub fn rotate90_cw(&mut self) {
+        if let Some(buf) = self.get_active_raster_buffer_mut() {
+            *buf = image::imageops::rotate90(buf);
+        }
+        std::mem::swap(&mut self.width, &mut self.height);
+        self.composite = ImageBuffer::new(self.width, self.height);
+        self.mark_dirty();
+    }
+
+    pub fn rotate90_ccw(&mut self) {
+        if let Some(buf) = self.get_active_raster_buffer_mut() {
+            *buf = image::imageops::rotate270(buf);
+        }
+        std::mem::swap(&mut self.width, &mut self.height);
+        self.composite = ImageBuffer::new(self.width, self.height);
+        self.mark_dirty();
+    }
+
+    pub fn rotate180(&mut self) {
+        if let Some(buf) = self.get_active_raster_buffer_mut() {
+            *buf = image::imageops::rotate180(buf);
+        }
+        self.mark_dirty();
+    }
+
+    pub fn flip_horizontal(&mut self) {
+        if let Some(buf) = self.get_active_raster_buffer_mut() {
+            image::imageops::flip_horizontal_in_place(buf);
+        }
+        self.mark_dirty();
+    }
+
+    pub fn flip_vertical(&mut self) {
+        if let Some(buf) = self.get_active_raster_buffer_mut() {
+            image::imageops::flip_vertical_in_place(buf);
+        }
+        self.mark_dirty();
+    }
+
+    pub fn invert_colors(&mut self) {
+        if let Some(buf) = self.get_active_raster_buffer_mut() {
+            for pixel in buf.pixels_mut() {
+                pixel[0] = 255 - pixel[0];
+                pixel[1] = 255 - pixel[1];
+                pixel[2] = 255 - pixel[2];
+            }
+        }
+        self.mark_dirty();
+    }
+
+    pub fn crop_to(&mut self, x: u32, y: u32, w: u32, h: u32) {
+        if let Some(buf) = self.get_active_raster_buffer_mut() {
+            use image::GenericImageView;
+            *buf = buf.view(x, y, w, h).to_image();
+        }
+        self.width = w;
+        self.height = h;
+        self.selection = None;
+        self.composite = ImageBuffer::new(w, h);
+        self.mark_dirty();
+    }
+
+    pub fn get_active_raster_snapshot(&self) -> Option<RgbaImage> {
+        self.layers.get(self.active_layer).and_then(|l| {
+            match &l.data {
+                LayerData::Raster(img) => Some(img.clone()),
+                LayerData::Tone { buffer, .. } => Some(buffer.clone()),
+                _ => None,
+            }
+        })
+    }
 }

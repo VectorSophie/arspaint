@@ -1,0 +1,40 @@
+<h2>Which direction feels right for ArsPaint?</h2>
+<p class="subtitle">You mentioned you may have strayed — let's find the north star. Pick the vision that excites you most.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Faithful MS Paint remake</h3>
+      <p>Strip back to simplicity. No layers, no blend modes. Just a flat canvas with the classic tools: pencil, fill, shapes, text, zoom. The appeal is nostalgia and speed — loads instantly, zero friction, everything visible at a glance. Good for pixel art, memes, quick diagrams.</p>
+      <p style="margin-top:8px;font-size:0.85em;opacity:0.65;">Drop: layers, blend modes, lasso, transform. Keep: shapes, fill, eraser, color picker.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>MS Paint + just enough power</h3>
+      <p>Keep it feeling like Paint but add the features that make it not painful: layers, undo history, zoom, maybe basic selection. The pitch is "Paint that doesn't suck" — familiar to everyone, but you won't lose work because you can't undo 20 steps.</p>
+      <p style="margin-top:8px;font-size:0.85em;opacity:0.65;">This is roughly where ArsPaint is now. The question is whether to polish and focus, or push further.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Comic / manga drawing tool</h3>
+      <p>Lean into the tone layers and vector shapes already in the codebase. Target manga artists and comic creators: panel layouts, screentones, inking tools, brush textures, export to print-ready B&W. Fills a niche that Krita and CSP occupy but with a leaner Rust-native feel.</p>
+      <p style="margin-top:8px;font-size:0.85em;opacity:0.65;">Would need: tone rendering, panel tool, B&W workflow, ink stabilization.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Lightweight digital painting app</h3>
+      <p>Lean fully into the painting side: pressure-sensitive brush engine, custom brush shapes/textures, color mixing, more blend modes, reference image panel. A Krita-lite that actually runs snappy on low-end hardware. Target hobbyist illustrators who find Krita overwhelming.</p>
+      <p style="margin-top:8px;font-size:0.85em;opacity:0.65;">Would need: pressure API, brush engine rewrite, color wheel, mixer.</p>
+    </div>
+  </div>
+</div>

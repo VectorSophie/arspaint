@@ -1,0 +1,58 @@
+<h2>Shape gallery scope?</h2>
+<p class="subtitle">Modern Paint ships 23 shapes. How many do we implement in Phase A?</p>
+
+<div class="options">
+
+  <div class="option" data-choice="all" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>All 23 — full modern Paint gallery</h3>
+      <p>Every shape Paint has, including the exotic ones. Faithful to what you use daily.</p>
+      <div style="margin-top:10px;display:grid;grid-template-columns:repeat(6,1fr);gap:6px;font-size:1.4em;text-align:center">
+        <div title="Line">╱</div>
+        <div title="Curve">〰</div>
+        <div title="Oval">⬭</div>
+        <div title="Rectangle">▭</div>
+        <div title="Rounded rect">▢</div>
+        <div title="Triangle">△</div>
+        <div title="Right triangle">◺</div>
+        <div title="Diamond">◇</div>
+        <div title="Pentagon">⬠</div>
+        <div title="Hexagon">⬡</div>
+        <div title="Right arrow">➡</div>
+        <div title="Left arrow">⬅</div>
+        <div title="Up arrow">⬆</div>
+        <div title="Down arrow">⬇</div>
+        <div title="4-way arrow">✛</div>
+        <div title="Left-right arrow">↔</div>
+        <div title="Up-down arrow">↕</div>
+        <div title="4-point star">✦</div>
+        <div title="6-point star">✶</div>
+        <div title="Rounded rect callout">💬</div>
+        <div title="Oval callout">🗨</div>
+        <div title="Cloud callout">☁</div>
+        <div title="Heart">♥</div>
+      </div>
+      <p style="margin-top:8px;font-size:0.82em;opacity:0.65;">Most of the exotic ones (stars, arrows, callouts, heart) are just polygon math — not much extra work once the renderer exists.</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="core" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Core 8 — the ones people actually use</h3>
+      <p>Line, Curve, Rectangle, Rounded Rectangle, Oval, Triangle, Diamond, Polygon (free-form). Ship these first, add the rest later.</p>
+      <div style="margin-top:10px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:1.6em;text-align:center">
+        <div title="Line">╱</div>
+        <div title="Curve">〰</div>
+        <div title="Rectangle">▭</div>
+        <div title="Rounded rect">▢</div>
+        <div title="Oval">⬭</div>
+        <div title="Triangle">△</div>
+        <div title="Diamond">◇</div>
+        <div title="Polygon">⬡</div>
+      </div>
+    </div>
+  </div>
+
+</div>
