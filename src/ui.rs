@@ -4,7 +4,7 @@ use crate::state::{AppState, FillMode, FloatingSelection, StrokeSize, PALETTE};
 use crate::tools::{
     AirbrushTool, BrushTool, CurveTool, EllipseTool, EraserTool, EyedropperTool, FillTool,
     LassoSelectionTool, LineTool, PencilTool, RectSelectionTool, RectangleTool, ShapeKind,
-    ShapeTool, ToolInput, TransformTool,
+    ShapeTool, SmearTool, ToolInput, TransformTool,
 };
 use eframe::egui::{
     self, Color32, Context, PointerButton, Pos2, Rect, Sense, TextureOptions, Ui, Vec2,
@@ -42,6 +42,8 @@ pub struct ArsApp {
     // eyedropper alt-mode
     alt_eyedropper_active: bool,
     pre_alt_tool_name: String,
+    // Phase D
+    show_color_wheel: bool,
 }
 
 impl ArsApp {
@@ -79,6 +81,7 @@ impl ArsApp {
             show_select_menu: false,
             alt_eyedropper_active: false,
             pre_alt_tool_name: String::new(),
+            show_color_wheel: true,
         }
     }
 
@@ -196,16 +199,25 @@ impl ArsApp {
                     let c = ui.selectable_label(is_pick,   "💧 Pick").clicked();
                     (a, b, c)
                 }).inner;
+                let is_smear = active == "Smear";
                 let clicked_row2 = ui.horizontal(|ui| {
                     let a = ui.selectable_label(false,     "A Text").clicked();
                     let b = ui.selectable_label(is_eraser, "⬜ Eraser").clicked();
                     let c = ui.selectable_label(false,     "🔍 Zoom").clicked();
                     (a, b, c)
                 }).inner;
+                let clicked_row3 = ui.horizontal(|ui| {
+                    let a = ui.selectable_label(is_smear, "〰 Smear").on_hover_text("Smear/wet mix (W)").clicked();
+                    (a,)
+                }).inner;
                 if clicked_pencil.0 { self.set_tool_pencil(); }
                 if clicked_pencil.1 { self.state.active_tool = Box::new(FillTool::new()); }
                 if clicked_pencil.2 { self.state.active_tool = Box::new(EyedropperTool::new()); }
                 if clicked_row2.1   { self.set_tool_eraser(); }
+                if clicked_row3.0   {
+                    let (w, h) = (self.state.image.width(), self.state.image.height());
+                    self.state.active_tool = Box::new(SmearTool::new(w, h));
+                }
                 // Stroke size
                 ui.horizontal(|ui| {
                     for (size, label) in [(StrokeSize::Thin,"—"),(StrokeSize::Medium,"─"),(StrokeSize::Thick,"━"),(StrokeSize::ExtraThick,"█")] {
@@ -473,19 +485,50 @@ impl ArsApp {
         });
 
         ui.separator();
-        // Brush opacity (Phase D)
+
+        // HSV color wheel
+        egui::CollapsingHeader::new("Color wheel")
+            .default_open(self.show_color_wheel)
+            .show(ui, |ui| {
+                self.show_color_wheel = true;
+                let c1 = self.state.color1;
+                let mut c1_32 = Color32::from_rgba_unmultiplied(c1[0], c1[1], c1[2], 255);
+                if egui::color_picker::color_picker_color32(
+                    ui,
+                    &mut c1_32,
+                    egui::color_picker::Alpha::Opaque,
+                ) {
+                    let [r, g, b, _] = c1_32.to_array();
+                    self.state.color1 = Rgba([r, g, b, 255]);
+                }
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Color 2:").small());
+                    let c2 = self.state.color2;
+                    let mut c2_arr = [c2[0], c2[1], c2[2]];
+                    if ui.color_edit_button_srgb(&mut c2_arr).changed() {
+                        self.state.color2 = Rgba([c2_arr[0], c2_arr[1], c2_arr[2], 255]);
+                    }
+                    if ui.small_button("⇄").on_hover_text("Swap").clicked() {
+                        std::mem::swap(&mut self.state.color1, &mut self.state.color2);
+                    }
+                });
+            });
+
+        ui.separator();
+
+        // Brush controls
         ui.horizontal(|ui| {
-            ui.label("Brush opacity");
+            ui.label("Opacity");
             ui.add(egui::Slider::new(&mut self.state.tool_settings.brush_opacity, 0.01..=1.0).show_value(false));
             ui.label(format!("{:.0}%", self.state.tool_settings.brush_opacity * 100.0));
         });
         ui.horizontal(|ui| {
-            ui.label("Brush size");
+            ui.label("Size");
             ui.add(egui::Slider::new(&mut self.state.tool_settings.brush_size, 1.0..=200.0).show_value(false));
             ui.label(format!("{:.0}px", self.state.tool_settings.brush_size));
         });
         ui.horizontal(|ui| {
-            ui.label("Smoothing");
+            ui.label("Smooth");
             ui.add(egui::Slider::new(&mut self.state.tool_settings.brush_stabilization, 0.0..=0.95).show_value(false));
         });
     }
@@ -703,12 +746,12 @@ impl ArsApp {
         let (kb_undo, kb_redo, kb_sel_all, kb_copy, kb_cut, kb_paste,
              kb_new, kb_open, kb_save, kb_save_as, kb_resize, kb_invert,
              kb_zoom_in, kb_zoom_out, kb_pan,
-             kb_pencil, kb_brush, kb_eraser, kb_fill, kb_eye, kb_airbrush, kb_select) = {
+             kb_pencil, kb_brush, kb_eraser, kb_fill, kb_eye, kb_airbrush, kb_smear, kb_select) = {
             let kb = &self.state.keybindings;
             (kb.undo, kb.redo, kb.select_all, kb.copy, kb.cut, kb.paste,
              kb.new_file, kb.open_file, kb.save, kb.save_as, kb.resize_dialog, kb.invert,
              kb.zoom_in, kb.zoom_out, kb.pan,
-             kb.pencil, kb.brush, kb.eraser, kb.fill, kb.eyedropper, kb.airbrush, kb.select)
+             kb.pencil, kb.brush, kb.eraser, kb.fill, kb.eyedropper, kb.airbrush, kb.smear, kb.select)
         };
 
         let ctrl = ui.input(|i| i.modifiers.ctrl);
@@ -744,7 +787,7 @@ impl ArsApp {
             let (do_undo, do_redo, do_sel_all, do_copy, do_cut, do_paste,
                  do_new, do_open, do_save, do_save_as, do_resize, do_invert,
                  do_zoom_in, do_zoom_out,
-                 do_pencil, do_brush, do_eraser, do_fill, do_eye, do_airbrush, do_select,
+                 do_pencil, do_brush, do_eraser, do_fill, do_eye, do_airbrush, do_smear, do_select,
                  do_escape, do_delete) =
             ui.input(|i| (
                 kb_undo.matches(i), kb_redo.matches(i), kb_sel_all.matches(i),
@@ -758,6 +801,7 @@ impl ArsApp {
                 (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_fill)),
                 (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_eye)),
                 (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_airbrush)),
+                (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_smear)),
                 (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_select)),
                 i.key_pressed(egui::Key::Escape),
                 i.key_pressed(egui::Key::Delete),
@@ -786,6 +830,7 @@ impl ArsApp {
             if do_fill    { self.state.active_tool = Box::new(FillTool::new()); }
             if do_eye     { self.state.active_tool = Box::new(EyedropperTool::new()); }
             if do_airbrush{ self.state.active_tool = Box::new(AirbrushTool::new(img_w, img_h)); }
+            if do_smear   { self.state.active_tool = Box::new(SmearTool::new(img_w, img_h)); }
             if do_select  { self.state.active_tool = Box::new(RectSelectionTool::new()); }
             if do_escape  {
                 self.stamp_floating_selection();
@@ -901,11 +946,13 @@ impl ArsApp {
     fn restore_pre_alt_tool(&mut self) {
         let (w, h) = (self.state.image.width(), self.state.image.height());
         self.state.active_tool = match self.pre_alt_tool_name.as_str() {
-            "Pencil" => Box::new(PencilTool::new(w, h)),
-            "Eraser" => Box::new(EraserTool::new(w, h)),
-            "Brush"  => Box::new(BrushTool::new(w, h)),
-            "Fill"   => Box::new(FillTool::new()),
-            "Line"   => Box::new(LineTool::new(w, h)),
+            "Pencil"  => Box::new(PencilTool::new(w, h)),
+            "Eraser"  => Box::new(EraserTool::new(w, h)),
+            "Brush"   => Box::new(BrushTool::new(w, h)),
+            "Fill"    => Box::new(FillTool::new()),
+            "Line"    => Box::new(LineTool::new(w, h)),
+            "Smear"   => Box::new(SmearTool::new(w, h)),
+            "Airbrush"=> Box::new(AirbrushTool::new(w, h)),
             _ => Box::new(PencilTool::new(w, h)),
         };
     }
