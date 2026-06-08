@@ -1,6 +1,7 @@
 mod canvas;
 mod dialogs;
 mod layers_panel;
+mod menu_bar;
 mod status_bar;
 mod theme;
 use crate::image_store::ImageStore;
