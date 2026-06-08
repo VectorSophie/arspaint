@@ -9,20 +9,16 @@ mod theme;
 mod toolbar;
 mod tools_panel;
 use crate::image_store::ImageStore;
-use crate::state::{AppState, FillMode, FloatingSelection, StrokeSize, PALETTE};
+use crate::state::{AppState, FloatingSelection};
 use crate::tools::{
-    AirbrushTool, BrushTool, CurveTool, EllipseTool, EraserTool, EyedropperTool, FillTool,
-    LineTool, PencilTool, RectangleTool, ShapeKind,
-    ShapeTool, SmearTool, TransformTool,
+    AirbrushTool, BrushTool, EraserTool, FillTool,
+    LineTool, PencilTool, SmearTool,
 };
 use eframe::egui::{
-    self, Color32, Context, Pos2, Sense, TextureOptions, Ui, Vec2,
+    self, Context, Pos2, TextureOptions, Vec2,
 };
 use eframe::Frame;
-use image::{GenericImage, GenericImageView, ImageBuffer, Rgba, RgbaImage};
-
-#[derive(PartialEq, Clone, Copy)]
-enum RibbonTab { Home, View }
+use image::GenericImageView;
 
 pub struct ArsApp {
     state: AppState,
@@ -33,7 +29,6 @@ pub struct ArsApp {
     zoom: f32,
     pan: Vec2,
     image_dirty: bool,
-    ribbon_tab: RibbonTab,
     show_grid: bool,
     show_status_bar: bool,
     show_layers_panel: bool,
@@ -47,13 +42,9 @@ pub struct ArsApp {
     show_new_dialog: bool,
     new_w: u32,
     new_h: u32,
-    show_rotate_menu: bool,
-    show_select_menu: bool,
     // eyedropper alt-mode
     alt_eyedropper_active: bool,
     pre_alt_tool_name: String,
-    // Phase D
-    show_color_wheel: bool,
 }
 
 impl ArsApp {
@@ -71,7 +62,6 @@ impl ArsApp {
             zoom: 1.0,
             pan: Vec2::ZERO,
             image_dirty: true,
-            ribbon_tab: RibbonTab::Home,
             show_grid: false,
             show_status_bar: true,
             show_layers_panel: true,
@@ -84,11 +74,8 @@ impl ArsApp {
             show_new_dialog: false,
             new_w: 800,
             new_h: 600,
-            show_rotate_menu: false,
-            show_select_menu: false,
             alt_eyedropper_active: false,
             pre_alt_tool_name: String::new(),
-            show_color_wheel: true,
         }
     }
 
@@ -145,236 +132,7 @@ impl ArsApp {
         }
     }
 
-    // ── Ribbon ────────────────────────────────────────────────────────────────
-
-    fn render_ribbon(&mut self, ui: &mut Ui) {
-        // Tab bar
-        ui.horizontal(|ui| {
-            let home_color = if self.ribbon_tab == RibbonTab::Home { Color32::from_rgb(122, 162, 247) } else { Color32::GRAY };
-            let view_color = if self.ribbon_tab == RibbonTab::View  { Color32::from_rgb(122, 162, 247) } else { Color32::GRAY };
-            if ui.add(egui::Button::new(egui::RichText::new("Home").color(home_color)).frame(false)).clicked() {
-                self.ribbon_tab = RibbonTab::Home;
-            }
-            if ui.add(egui::Button::new(egui::RichText::new("View").color(view_color)).frame(false)).clicked() {
-                self.ribbon_tab = RibbonTab::View;
-            }
-        });
-        ui.separator();
-
-        match self.ribbon_tab {
-            RibbonTab::Home => self.render_home_tab(ui),
-            RibbonTab::View => self.render_view_tab(ui),
-        }
-    }
-
-    fn render_home_tab(&mut self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            // ── Clipboard ──
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Clipboard").small().color(Color32::GRAY));
-                ui.horizontal(|ui| {
-                    if ui.button("Paste").clicked() { self.do_paste(); }
-                });
-                ui.horizontal(|ui| {
-                    if ui.button("Cut").clicked() { self.do_cut(); }
-                    if ui.button("Copy").clicked() { self.do_copy(); }
-                });
-            });
-            ui.separator();
-
-            // ── Image ──
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Image").small().color(Color32::GRAY));
-                ui.horizontal(|ui| {
-                    // Select dropdown
-                    if ui.button("Select ▾").clicked() { self.show_select_menu = !self.show_select_menu; }
-                    if ui.button("Crop").clicked() { self.do_crop(); }
-                });
-                ui.horizontal(|ui| {
-                    if ui.button("Resize").clicked() {
-                        self.resize_w = self.state.image.width();
-                        self.resize_h = self.state.image.height();
-                        self.show_resize_dialog = true;
-                    }
-                    if ui.button("Rotate ▾").clicked() { self.show_rotate_menu = !self.show_rotate_menu; }
-                });
-            });
-            ui.separator();
-
-            // ── Tools ──
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Tools").small().color(Color32::GRAY));
-                let active = self.state.active_tool.name().to_string();
-                let is_pencil  = active == "Pencil";
-                let is_fill    = active == "Fill";
-                let is_pick    = active == "Color Picker";
-                let is_eraser  = active == "Eraser";
-                let clicked_pencil = ui.horizontal(|ui| {
-                    let a = ui.selectable_label(is_pencil, "✏ Pencil").clicked();
-                    let b = ui.selectable_label(is_fill,   "⬛ Fill").clicked();
-                    let c = ui.selectable_label(is_pick,   "💧 Pick").clicked();
-                    (a, b, c)
-                }).inner;
-                let is_smear = active == "Smear";
-                let clicked_row2 = ui.horizontal(|ui| {
-                    let a = ui.selectable_label(false,     "A Text").clicked();
-                    let b = ui.selectable_label(is_eraser, "⬜ Eraser").clicked();
-                    let c = ui.selectable_label(false,     "🔍 Zoom").clicked();
-                    (a, b, c)
-                }).inner;
-                let clicked_row3 = ui.horizontal(|ui| {
-                    let a = ui.selectable_label(is_smear, "〰 Smear").on_hover_text("Smear/wet mix (W)").clicked();
-                    (a,)
-                }).inner;
-                if clicked_pencil.0 { self.set_tool_pencil(); }
-                if clicked_pencil.1 { self.state.active_tool = Box::new(FillTool::new()); }
-                if clicked_pencil.2 { self.state.active_tool = Box::new(EyedropperTool::new()); }
-                if clicked_row2.1   { self.set_tool_eraser(); }
-                if clicked_row3.0   {
-                    let (w, h) = (self.state.image.width(), self.state.image.height());
-                    self.state.active_tool = Box::new(SmearTool::new(w, h));
-                }
-                // Stroke size
-                ui.horizontal(|ui| {
-                    for (size, label) in [(StrokeSize::Thin,"—"),(StrokeSize::Medium,"─"),(StrokeSize::Thick,"━"),(StrokeSize::ExtraThick,"█")] {
-                        if ui.selectable_label(self.state.tool_settings.stroke_size == size, label).clicked() {
-                            self.state.tool_settings.stroke_size = size;
-                            self.state.tool_settings.line_width = size.px();
-                            self.state.tool_settings.eraser_size = size.px() * 2.0;
-                            self.state.tool_settings.brush_size = size.px() * 2.0;
-                        }
-                    }
-                });
-            });
-            ui.separator();
-
-            // ── Shapes ──
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Shapes").small().color(Color32::GRAY));
-                let active = self.state.active_tool.name().to_string();
-                let img_w = self.state.image.width();
-                let img_h = self.state.image.height();
-
-                // Line tools row 1
-                let (cl, cc, ct, cd) = ui.horizontal(|ui| (
-                    ui.selectable_label(active == "Line",  "╱ Line").clicked(),
-                    ui.selectable_label(active == "Curve", "〰 Curve").clicked(),
-                    ui.selectable_label(active == "Shape", "△ Tri").clicked(),
-                    ui.selectable_label(active == "Shape", "◇ Dia").clicked(),
-                )).inner;
-                if cl { self.state.active_tool = Box::new(LineTool::new(img_w, img_h)); }
-                if cc { self.state.active_tool = Box::new(CurveTool::new(img_w, img_h)); }
-                if ct { self.state.active_tool = Box::new(ShapeTool::new(ShapeKind::Triangle, img_w, img_h)); }
-                if cd { self.state.active_tool = Box::new(ShapeTool::new(ShapeKind::Diamond, img_w, img_h)); }
-
-                let (cr, ce) = ui.horizontal(|ui| (
-                    ui.selectable_label(active == "Rectangle", "▭ Rect").clicked(),
-                    ui.selectable_label(active == "Ellipse",   "⬭ Oval").clicked(),
-                )).inner;
-                if cr { self.state.active_tool = Box::new(RectangleTool::new(img_w, img_h)); }
-                if ce { self.state.active_tool = Box::new(EllipseTool::new(img_w, img_h)); }
-
-                let cur_shape = self.shape_kind();
-                let shape_clicks: Vec<(ShapeKind, bool)> = ui.horizontal_wrapped(|ui| {
-                    [
-                        (ShapeKind::RightTriangle,"◺"),(ShapeKind::Pentagon,"⬠"),
-                        (ShapeKind::Hexagon,"⬡"),(ShapeKind::ArrowRight,"➡"),
-                        (ShapeKind::ArrowLeft,"⬅"),(ShapeKind::ArrowUp,"⬆"),
-                        (ShapeKind::ArrowDown,"⬇"),(ShapeKind::Arrow4Way,"✛"),
-                        (ShapeKind::ArrowLeftRight,"↔"),(ShapeKind::ArrowUpDown,"↕"),
-                        (ShapeKind::Star4,"✦"),(ShapeKind::Star6,"✶"),
-                        (ShapeKind::CalloutRect,"💬"),(ShapeKind::CalloutOval,"🗨"),
-                        (ShapeKind::CalloutCloud,"☁"),(ShapeKind::Heart,"♥"),
-                        (ShapeKind::Polygon,"⬡̣"),
-                    ].iter().map(|(kind, label)| {
-                        (*kind, ui.selectable_label(cur_shape == Some(*kind), *label).on_hover_text(format!("{:?}", kind)).clicked())
-                    }).collect()
-                }).inner;
-                for (kind, clicked) in shape_clicks {
-                    if clicked { self.state.active_tool = Box::new(ShapeTool::new(kind, img_w, img_h)); }
-                }
-                // Fill mode
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Fill:").small());
-                    for (mode, label) in [(FillMode::Outline,"Outline"),(FillMode::Fill,"Fill"),(FillMode::Both,"Both")] {
-                        if ui.selectable_label(self.state.tool_settings.shape_fill_mode == mode, label).clicked() {
-                            self.state.tool_settings.shape_fill_mode = mode;
-                        }
-                    }
-                });
-            });
-            ui.separator();
-
-            // ── Colors ──
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Colors").small().color(Color32::GRAY));
-
-                // Stacked Color 2 behind Color 1 (Paint-style)
-                ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        // Color 2 (background) — bottom swatch
-                        let c2 = self.state.color2;
-                        let mut c2_arr = [c2[0], c2[1], c2[2]];
-                        ui.label(egui::RichText::new("2").small().color(Color32::GRAY));
-                        if ui.color_edit_button_srgb(&mut c2_arr).changed() {
-                            self.state.color2 = Rgba([c2_arr[0], c2_arr[1], c2_arr[2], 255]);
-                        }
-                    });
-                    ui.vertical(|ui| {
-                        // Color 1 (foreground) — top swatch
-                        let c1 = self.state.color1;
-                        let mut c1_arr = [c1[0], c1[1], c1[2]];
-                        ui.label(egui::RichText::new("1").small().color(Color32::GRAY));
-                        if ui.color_edit_button_srgb(&mut c1_arr).changed() {
-                            self.state.color1 = Rgba([c1_arr[0], c1_arr[1], c1_arr[2], 255]);
-                        }
-                    });
-                    // Swap button
-                    if ui.button("⇄").on_hover_text("Swap colors").clicked() {
-                        std::mem::swap(&mut self.state.color1, &mut self.state.color2);
-                    }
-                });
-
-                // 20-color palette (2 rows of 10)
-                ui.horizontal_wrapped(|ui| {
-                    for color in &PALETTE {
-                        let c32 = Color32::from_rgba_unmultiplied(color[0], color[1], color[2], 255);
-                        let (rect, resp) = ui.allocate_at_least(Vec2::splat(14.0), Sense::click());
-                        ui.painter().rect_filled(rect, 1.0, c32);
-                        ui.painter().rect_stroke(rect, 1.0, egui::Stroke::new(0.5, Color32::from_gray(60)));
-                        if resp.clicked() { self.state.color1 = *color; }
-                        if resp.secondary_clicked() { self.state.color2 = *color; }
-                    }
-                });
-            });
-        });
-    }
-
-    fn render_view_tab(&mut self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Zoom").small().color(Color32::GRAY));
-                ui.horizontal(|ui| {
-                    if ui.button("＋").clicked() { self.zoom = (self.zoom * 1.25).min(50.0); }
-                    if ui.button("－").clicked() { self.zoom = (self.zoom / 1.25).max(0.1); }
-                    if ui.button("100%").clicked() { self.zoom = 1.0; }
-                });
-            });
-            ui.separator();
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Show or hide").small().color(Color32::GRAY));
-                ui.checkbox(&mut self.show_grid, "Gridlines");
-                ui.checkbox(&mut self.show_status_bar, "Status bar");
-                ui.checkbox(&mut self.show_layers_panel, "Layers");
-            });
-        });
-    }
-
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    fn shape_kind(&self) -> Option<ShapeKind> {
-        self.state.active_tool.active_shape_kind()
-    }
 
     fn set_tool_pencil(&mut self) {
         let (w, h) = (self.state.image.width(), self.state.image.height());
@@ -412,7 +170,6 @@ impl ArsApp {
                         let tx = x + px;
                         let ty = y + py;
                         if tx >= 0 && tx < iw && ty >= 0 && ty < ih {
-                            use image::GenericImageView;
                             let p = *fs.image.get_pixel(px as u32, py as u32);
                             if p[3] > 0 { buf.put_pixel(tx as u32, ty as u32, p); }
                         }
@@ -444,7 +201,6 @@ impl ArsApp {
                 if max_x >= min_x && max_y >= min_y {
                     let w = max_x - min_x + 1;
                     let h = max_y - min_y + 1;
-                    use image::GenericImageView;
                     self.state.clipboard = Some(buf.view(min_x, min_y, w, h).to_image());
                 }
             } else {
@@ -538,24 +294,27 @@ impl eframe::App for ArsApp {
         self.update_textures(ctx);
         self.render_dialogs(ctx);
 
-        egui::TopBottomPanel::top("ribbon").show(ctx, |ui| {
-            self.render_ribbon(ui);
-        });
+        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| { self.render_menu_bar(ui); });
+        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| { self.render_toolbar(ui); });
 
         if self.show_status_bar {
-            egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
-                self.render_status_bar(ui);
-            });
+            egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| { self.render_status_bar(ui); });
         }
+
+        egui::SidePanel::left("tools_panel").resizable(false).exact_width(104.0).show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| { self.render_tools_panel(ui); });
+        });
 
         if self.show_layers_panel {
-            egui::SidePanel::right("layers_panel").min_width(180.0).show(ctx, |ui| {
-                self.render_layers_panel(ui);
+            egui::SidePanel::right("right_dock").min_width(188.0).show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    egui::CollapsingHeader::new("Colors").default_open(true).show(ui, |ui| { self.render_colors_panel(ui); });
+                    egui::CollapsingHeader::new("Layers").default_open(true).show(ui, |ui| { self.render_layers_panel(ui); });
+                    egui::CollapsingHeader::new("History").default_open(true).show(ui, |ui| { self.render_history_panel(ui); });
+                });
             });
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.render_canvas(ui);
-        });
+        egui::CentralPanel::default().show(ctx, |ui| { self.render_canvas(ui); });
     }
 }

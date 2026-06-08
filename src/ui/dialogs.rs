@@ -1,49 +1,9 @@
 use super::ArsApp;
 use eframe::egui::{self, Context};
 use crate::image_store::ImageStore;
-use crate::tools::{LassoSelectionTool, RectSelectionTool};
 
 impl ArsApp {
     pub(super) fn render_dialogs(&mut self, ctx: &Context) {
-        // Rotate dropdown (simple window)
-        if self.show_rotate_menu {
-            egui::Window::new("Rotate / Flip").collapsible(false).resizable(false)
-                .show(ctx, |ui| {
-                    if ui.button("Rotate 90° right").clicked()  { self.state.image.rotate90_cw();  self.image_dirty = true; self.show_rotate_menu = false; }
-                    if ui.button("Rotate 90° left").clicked()   { self.state.image.rotate90_ccw(); self.image_dirty = true; self.show_rotate_menu = false; }
-                    if ui.button("Rotate 180°").clicked()       { self.state.image.rotate180();    self.image_dirty = true; self.show_rotate_menu = false; }
-                    ui.separator();
-                    if ui.button("Flip horizontal").clicked()   { self.state.image.flip_horizontal(); self.image_dirty = true; self.show_rotate_menu = false; }
-                    if ui.button("Flip vertical").clicked()     { self.state.image.flip_vertical();   self.image_dirty = true; self.show_rotate_menu = false; }
-                    if ui.button("Cancel").clicked() { self.show_rotate_menu = false; }
-                });
-        }
-
-        // Select dropdown
-        if self.show_select_menu {
-            let img_w = self.state.image.width();
-            let img_h = self.state.image.height();
-            egui::Window::new("Select").collapsible(false).resizable(false)
-                .show(ctx, |ui| {
-                    if ui.button("Rectangular Selection").clicked() {
-                        self.state.active_tool = Box::new(RectSelectionTool::new());
-                        self.show_select_menu = false;
-                    }
-                    if ui.button("Free-form Selection").clicked() {
-                        self.state.active_tool = Box::new(LassoSelectionTool::new());
-                        self.show_select_menu = false;
-                    }
-                    if ui.button("Select All").clicked() {
-                        // fill entire selection mask
-                        let mut mask = image::GrayImage::new(img_w, img_h);
-                        for p in mask.pixels_mut() { *p = image::Luma([255]); }
-                        self.state.image.selection = Some(mask);
-                        self.show_select_menu = false;
-                    }
-                    if ui.button("Cancel").clicked() { self.show_select_menu = false; }
-                });
-        }
-
         // Resize dialog
         if self.show_resize_dialog {
             let orig_w = self.state.image.width();
