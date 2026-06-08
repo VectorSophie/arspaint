@@ -5,6 +5,7 @@ mod menu_bar;
 mod status_bar;
 mod theme;
 mod toolbar;
+mod tools_panel;
 use crate::image_store::ImageStore;
 use crate::state::{AppState, FillMode, FloatingSelection, StrokeSize, PALETTE};
 use crate::tools::{
