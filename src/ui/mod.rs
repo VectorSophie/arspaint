@@ -1,6 +1,7 @@
 mod canvas;
 mod colors_panel;
 mod dialogs;
+mod history_panel;
 mod layers_panel;
 mod menu_bar;
 mod status_bar;
