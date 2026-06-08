@@ -1,3 +1,4 @@
+mod theme;
 use crate::image_store::ImageStore;
 use crate::layers::Layer;
 use crate::state::{AppState, FillMode, FloatingSelection, StrokeSize, PALETTE};
@@ -48,11 +49,7 @@ pub struct ArsApp {
 
 impl ArsApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let mut visuals = egui::Visuals::dark();
-        visuals.window_fill = Color32::from_rgb(26, 27, 38);
-        visuals.panel_fill = Color32::from_rgb(26, 27, 38);
-        visuals.extreme_bg_color = Color32::from_rgb(22, 22, 30);
-        cc.egui_ctx.set_visuals(visuals);
+        theme::apply(&cc.egui_ctx);
 
         let state = AppState::new(800, 600);
         let (w, h) = (state.image.width(), state.image.height());
