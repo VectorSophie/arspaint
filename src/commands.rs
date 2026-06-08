@@ -54,6 +54,28 @@ impl CommandStack {
     pub fn can_redo(&self) -> bool {
         self.cursor < self.commands.len()
     }
+
+    pub fn entries(&self) -> &[Box<dyn Command>] {
+        &self.commands
+    }
+
+    pub fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    /// Undo/redo until `cursor == index` (clamped to `0..=len`).
+    pub fn jump_to(&mut self, index: usize, image: &mut ImageStore) {
+        let target = index.min(self.commands.len());
+        while self.cursor > target {
+            self.cursor -= 1;
+            self.commands[self.cursor].undo(image);
+        }
+        while self.cursor < target {
+            self.commands[self.cursor].redo(image);
+            self.cursor += 1;
+        }
+        image.mark_dirty();
+    }
 }
 
 pub struct PatchCommand {
@@ -91,5 +113,58 @@ impl Command for PatchCommand {
                 _ => {}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::image_store::ImageStore;
+
+    // Minimal no-op command that records its name; undo/redo do nothing to the image.
+    struct NamedCmd(&'static str);
+    impl Command for NamedCmd {
+        fn undo(&self, _image: &mut ImageStore) {}
+        fn redo(&self, _image: &mut ImageStore) {}
+        fn name(&self) -> &str { self.0 }
+    }
+
+    fn stack_with(names: &[&'static str]) -> CommandStack {
+        let mut s = CommandStack::new();
+        for n in names { s.push(Box::new(NamedCmd(n))); }
+        s
+    }
+
+    #[test]
+    fn entries_and_cursor_track_pushes() {
+        let s = stack_with(&["a", "b", "c"]);
+        assert_eq!(s.entries().len(), 3);
+        assert_eq!(s.cursor(), 3);
+        assert_eq!(s.entries()[0].name(), "a");
+    }
+
+    #[test]
+    fn jump_to_earlier_index_moves_cursor_back() {
+        let mut img = ImageStore::new(4, 4);
+        let mut s = stack_with(&["a", "b", "c"]);
+        s.jump_to(1, &mut img); // keep only "a" applied
+        assert_eq!(s.cursor(), 1);
+    }
+
+    #[test]
+    fn jump_to_later_index_moves_cursor_forward() {
+        let mut img = ImageStore::new(4, 4);
+        let mut s = stack_with(&["a", "b", "c"]);
+        s.jump_to(0, &mut img);
+        s.jump_to(3, &mut img);
+        assert_eq!(s.cursor(), 3);
+    }
+
+    #[test]
+    fn jump_to_clamps_out_of_range() {
+        let mut img = ImageStore::new(4, 4);
+        let mut s = stack_with(&["a", "b"]);
+        s.jump_to(99, &mut img);
+        assert_eq!(s.cursor(), 2);
     }
 }
