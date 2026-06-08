@@ -24,6 +24,7 @@ pub struct ArsApp {
     base_texture: Option<egui::TextureHandle>,
     layer_texture: Option<egui::TextureHandle>,
     selection_texture: Option<egui::TextureHandle>,
+    logo_texture: Option<egui::TextureHandle>,
     zoom: f32,
     pan: Vec2,
     image_dirty: bool,
@@ -61,6 +62,7 @@ impl ArsApp {
             base_texture: None,
             layer_texture: None,
             selection_texture: None,
+            logo_texture: None,
             zoom: 1.0,
             pan: Vec2::ZERO,
             image_dirty: true,
@@ -126,6 +128,15 @@ impl ArsApp {
             self.selection_texture = Some(ctx.load_texture("selection_mask", ci, TextureOptions::NEAREST));
         } else {
             self.selection_texture = None;
+        }
+
+        if self.logo_texture.is_none() {
+            if let Ok(img) = image::load_from_memory(include_bytes!("../logo.png")) {
+                let rgba = img.to_rgba8();
+                let ci = egui::ColorImage::from_rgba_unmultiplied(
+                    [rgba.width() as usize, rgba.height() as usize], rgba.as_raw());
+                self.logo_texture = Some(ctx.load_texture("logo", ci, TextureOptions::NEAREST));
+            }
         }
     }
 
