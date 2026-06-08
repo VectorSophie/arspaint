@@ -10,7 +10,8 @@ impl ArsApp {
         // (icon, tool name as reported by Tool::name(), builder)
         // `None` builder == not-yet-implemented (greyed for faithful layout).
         type Build = Option<fn(u32, u32) -> Box<dyn Tool>>;
-        let groups: [(&str, &[(&str, &str, Build)]); 5] = [
+        type ToolDef = (&'static str, &'static str, Build);
+        let groups: [(&str, &[ToolDef]); 5] = [
             ("Select", &[
                 ("▱", "Rectangular Selection", Some(|_, _| Box::new(RectSelectionTool::new()) as Box<dyn Tool>)),
                 ("◌", "Free-form Selection", Some(|_, _| Box::new(LassoSelectionTool::new()) as Box<dyn Tool>)),

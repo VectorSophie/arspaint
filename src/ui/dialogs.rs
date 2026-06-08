@@ -37,18 +37,16 @@ impl ArsApp {
                     } else {
                         ui.horizontal(|ui| {
                             ui.label("Width px:");
-                            if ui.add(egui::DragValue::new(&mut self.resize_w).range(1..=8000_u32)).changed() {
-                                if self.resize_lock_aspect {
-                                    self.resize_h = (orig_h as f32 * self.resize_w as f32 / orig_w as f32) as u32;
-                                }
+                            if ui.add(egui::DragValue::new(&mut self.resize_w).range(1..=8000_u32)).changed()
+                                && self.resize_lock_aspect {
+                                self.resize_h = (orig_h as f32 * self.resize_w as f32 / orig_w as f32) as u32;
                             }
                         });
                         ui.horizontal(|ui| {
                             ui.label("Height px:");
-                            if ui.add(egui::DragValue::new(&mut self.resize_h).range(1..=8000_u32)).changed() {
-                                if self.resize_lock_aspect {
-                                    self.resize_w = (orig_w as f32 * self.resize_h as f32 / orig_h as f32) as u32;
-                                }
+                            if ui.add(egui::DragValue::new(&mut self.resize_h).range(1..=8000_u32)).changed()
+                                && self.resize_lock_aspect {
+                                self.resize_w = (orig_w as f32 * self.resize_h as f32 / orig_h as f32) as u32;
                             }
                         });
                     }

@@ -112,7 +112,7 @@ impl ArsApp {
                         });
 
                         let mut blend = self.state.image.layers[idx].blend;
-                        egui::ComboBox::from_id_source(format!("blend_{}", idx))
+                        egui::ComboBox::from_id_salt(format!("blend_{}", idx))
                             .selected_text(format!("{:?}", blend))
                             .show_ui(ui, |ui| {
                                 use crate::layers::BlendMode;
