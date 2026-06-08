@@ -1,7 +1,6 @@
 use super::ArsApp;
 use eframe::egui::{self, Color32, Ui};
 use crate::layers::Layer;
-use image::Rgba;
 
 impl ArsApp {
     pub(super) fn render_layers_panel(&mut self, ui: &mut Ui) {
@@ -132,54 +131,6 @@ impl ArsApp {
                     }
                 });
             }
-        });
-
-        ui.separator();
-
-        // HSV color wheel
-        egui::CollapsingHeader::new("Color wheel")
-            .default_open(self.show_color_wheel)
-            .show(ui, |ui| {
-                self.show_color_wheel = true;
-                let c1 = self.state.color1;
-                let mut c1_32 = Color32::from_rgba_unmultiplied(c1[0], c1[1], c1[2], 255);
-                if egui::color_picker::color_picker_color32(
-                    ui,
-                    &mut c1_32,
-                    egui::color_picker::Alpha::Opaque,
-                ) {
-                    let [r, g, b, _] = c1_32.to_array();
-                    self.state.color1 = Rgba([r, g, b, 255]);
-                }
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Color 2:").small());
-                    let c2 = self.state.color2;
-                    let mut c2_arr = [c2[0], c2[1], c2[2]];
-                    if ui.color_edit_button_srgb(&mut c2_arr).changed() {
-                        self.state.color2 = Rgba([c2_arr[0], c2_arr[1], c2_arr[2], 255]);
-                    }
-                    if ui.small_button("⇄").on_hover_text("Swap").clicked() {
-                        std::mem::swap(&mut self.state.color1, &mut self.state.color2);
-                    }
-                });
-            });
-
-        ui.separator();
-
-        // Brush controls
-        ui.horizontal(|ui| {
-            ui.label("Opacity");
-            ui.add(egui::Slider::new(&mut self.state.tool_settings.brush_opacity, 0.01..=1.0).show_value(false));
-            ui.label(format!("{:.0}%", self.state.tool_settings.brush_opacity * 100.0));
-        });
-        ui.horizontal(|ui| {
-            ui.label("Size");
-            ui.add(egui::Slider::new(&mut self.state.tool_settings.brush_size, 1.0..=200.0).show_value(false));
-            ui.label(format!("{:.0}px", self.state.tool_settings.brush_size));
-        });
-        ui.horizontal(|ui| {
-            ui.label("Smooth");
-            ui.add(egui::Slider::new(&mut self.state.tool_settings.brush_stabilization, 0.0..=0.95).show_value(false));
         });
     }
 }
