@@ -1,4 +1,5 @@
 mod canvas;
+mod colors_panel;
 mod dialogs;
 mod layers_panel;
 mod menu_bar;
