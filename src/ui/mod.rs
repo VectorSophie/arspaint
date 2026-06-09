@@ -11,8 +11,8 @@ mod tools_panel;
 use crate::image_store::ImageStore;
 use crate::state::{AppState, FloatingSelection};
 use crate::tools::{
-    AirbrushTool, BrushTool, EraserTool, FillTool,
-    LineTool, PencilTool, SmearTool,
+    BrushTool, EraserTool, FillTool,
+    LineTool, PencilTool,
 };
 use eframe::egui::{
     self, Context, Pos2, TextureOptions, Vec2,
@@ -152,8 +152,6 @@ impl ArsApp {
             "Brush"   => Box::new(BrushTool::new(w, h)),
             "Fill"    => Box::new(FillTool::new()),
             "Line"    => Box::new(LineTool::new(w, h)),
-            "Smear"   => Box::new(SmearTool::new(w, h)),
-            "Airbrush"=> Box::new(AirbrushTool::new(w, h)),
             _ => Box::new(PencilTool::new(w, h)),
         };
     }

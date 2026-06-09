@@ -1,4 +1,3 @@
-pub mod airbrush;
 pub mod base;
 pub mod curve;
 pub mod ellipse;
@@ -8,10 +7,8 @@ pub mod pencil;
 pub mod rect;
 pub mod selection;
 pub mod shapes;
-pub mod smear;
 pub mod transform;
 
-pub use airbrush::AirbrushTool;
 pub use base::{BrushTool, EraserTool, LineTool, Tool, ToolInput};
 pub use curve::CurveTool;
 pub use ellipse::EllipseTool;
@@ -21,5 +18,4 @@ pub use pencil::PencilTool;
 pub use rect::RectangleTool;
 pub use selection::{LassoSelectionTool, RectSelectionTool};
 pub use shapes::{ShapeKind, ShapeTool};
-pub use smear::SmearTool;
 pub use transform::TransformTool;

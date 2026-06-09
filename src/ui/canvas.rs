@@ -1,6 +1,6 @@
 use super::ArsApp;
 use egui::{Color32, PointerButton, Pos2, Rect, Sense, Ui, Vec2};
-use crate::tools::{AirbrushTool, BrushTool, EyedropperTool, FillTool, RectSelectionTool, SmearTool, ToolInput};
+use crate::tools::{BrushTool, EyedropperTool, FillTool, RectSelectionTool, ToolInput};
 
 /// Map a screen-space point to image pixel coords (may be outside the image).
 /// `image_min` is the top-left of the drawn image rect; `zoom` is px-per-image-px.
@@ -110,12 +110,12 @@ impl ArsApp {
         let (kb_undo, kb_redo, kb_sel_all, kb_copy, kb_cut, kb_paste,
              kb_new, kb_open, kb_save, kb_save_as, kb_resize, kb_invert,
              kb_zoom_in, kb_zoom_out, kb_pan,
-             kb_pencil, kb_brush, kb_eraser, kb_fill, kb_eye, kb_airbrush, kb_smear, kb_select) = {
+             kb_pencil, kb_brush, kb_eraser, kb_fill, kb_eye, kb_select) = {
             let kb = &self.state.keybindings;
             (kb.undo, kb.redo, kb.select_all, kb.copy, kb.cut, kb.paste,
              kb.new_file, kb.open_file, kb.save, kb.save_as, kb.resize_dialog, kb.invert,
              kb.zoom_in, kb.zoom_out, kb.pan,
-             kb.pencil, kb.brush, kb.eraser, kb.fill, kb.eyedropper, kb.airbrush, kb.smear, kb.select)
+             kb.pencil, kb.brush, kb.eraser, kb.fill, kb.eyedropper, kb.select)
         };
 
         let ctrl = ui.input(|i| i.modifiers.ctrl);
@@ -151,7 +151,7 @@ impl ArsApp {
             let (do_undo, do_redo, do_sel_all, do_copy, do_cut, do_paste,
                  do_new, do_open, do_save, do_save_as, do_resize, do_invert,
                  do_zoom_in, do_zoom_out,
-                 do_pencil, do_brush, do_eraser, do_fill, do_eye, do_airbrush, do_smear, do_select,
+                 do_pencil, do_brush, do_eraser, do_fill, do_eye, do_select,
                  do_escape, do_delete) =
             ui.input(|i| (
                 kb_undo.matches(i), kb_redo.matches(i), kb_sel_all.matches(i),
@@ -164,8 +164,6 @@ impl ArsApp {
                 (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_eraser)),
                 (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_fill)),
                 (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_eye)),
-                (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_airbrush)),
-                (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_smear)),
                 (!i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(kb_select)),
                 i.key_pressed(egui::Key::Escape),
                 i.key_pressed(egui::Key::Delete),
@@ -193,8 +191,6 @@ impl ArsApp {
             if do_eraser  { self.set_tool_eraser(); }
             if do_fill    { self.state.active_tool = Box::new(FillTool::new()); }
             if do_eye     { self.state.active_tool = Box::new(EyedropperTool::new()); }
-            if do_airbrush{ self.state.active_tool = Box::new(AirbrushTool::new(img_w, img_h)); }
-            if do_smear   { self.state.active_tool = Box::new(SmearTool::new(img_w, img_h)); }
             if do_select  { self.state.active_tool = Box::new(RectSelectionTool::new()); }
             if do_escape  {
                 self.stamp_floating_selection();

@@ -22,9 +22,7 @@ impl ArsApp {
                 ("✏", "Pencil", Some(|w, h| Box::new(PencilTool::new(w, h)) as Box<dyn Tool>)),
                 ("🖌", "Brush", Some(|w, h| Box::new(BrushTool::new(w, h)) as Box<dyn Tool>)),
                 ("▰", "Eraser", Some(|w, h| Box::new(EraserTool::new(w, h)) as Box<dyn Tool>)),
-                ("💨", "Airbrush", Some(|w, h| Box::new(AirbrushTool::new(w, h)) as Box<dyn Tool>)),
                 ("🪣", "Fill", Some(|_, _| Box::new(FillTool::new()) as Box<dyn Tool>)),
-                ("〰", "Smear", Some(|w, h| Box::new(SmearTool::new(w, h)) as Box<dyn Tool>)),
                 ("◢", "Gradient", None),
             ]),
             ("Photo", &[
