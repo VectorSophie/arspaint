@@ -261,10 +261,9 @@ impl ImageStore {
         self.mark_dirty();
     }
 
-    pub fn resize_scaled(&mut self, new_width: u32, new_height: u32) {
-        if let Some(buf) = self.get_active_raster_buffer_mut() {
-            let src = image::imageops::resize(buf, new_width, new_height, image::imageops::FilterType::Nearest);
-            *buf = src;
+    pub fn resize_all_scaled(&mut self, new_width: u32, new_height: u32) {
+        for l in &mut self.layers {
+            l.pixels = image::imageops::resize(&l.pixels, new_width, new_height, image::imageops::FilterType::Triangle);
         }
         self.width = new_width;
         self.height = new_height;
@@ -273,60 +272,44 @@ impl ImageStore {
     }
 
     pub fn rotate90_cw(&mut self) {
-        if let Some(buf) = self.get_active_raster_buffer_mut() {
-            *buf = image::imageops::rotate90(buf);
-        }
+        for l in &mut self.layers { l.pixels = image::imageops::rotate90(&l.pixels); }
         std::mem::swap(&mut self.width, &mut self.height);
         self.composite = ImageBuffer::new(self.width, self.height);
         self.mark_dirty();
     }
 
     pub fn rotate90_ccw(&mut self) {
-        if let Some(buf) = self.get_active_raster_buffer_mut() {
-            *buf = image::imageops::rotate270(buf);
-        }
+        for l in &mut self.layers { l.pixels = image::imageops::rotate270(&l.pixels); }
         std::mem::swap(&mut self.width, &mut self.height);
         self.composite = ImageBuffer::new(self.width, self.height);
         self.mark_dirty();
     }
 
     pub fn rotate180(&mut self) {
-        if let Some(buf) = self.get_active_raster_buffer_mut() {
-            *buf = image::imageops::rotate180(buf);
-        }
+        for l in &mut self.layers { l.pixels = image::imageops::rotate180(&l.pixels); }
         self.mark_dirty();
     }
 
     pub fn flip_horizontal(&mut self) {
-        if let Some(buf) = self.get_active_raster_buffer_mut() {
-            image::imageops::flip_horizontal_in_place(buf);
-        }
+        for l in &mut self.layers { image::imageops::flip_horizontal_in_place(&mut l.pixels); }
         self.mark_dirty();
     }
 
     pub fn flip_vertical(&mut self) {
-        if let Some(buf) = self.get_active_raster_buffer_mut() {
-            image::imageops::flip_vertical_in_place(buf);
-        }
+        for l in &mut self.layers { image::imageops::flip_vertical_in_place(&mut l.pixels); }
         self.mark_dirty();
     }
 
     pub fn invert_colors(&mut self) {
-        if let Some(buf) = self.get_active_raster_buffer_mut() {
-            for pixel in buf.pixels_mut() {
-                pixel[0] = 255 - pixel[0];
-                pixel[1] = 255 - pixel[1];
-                pixel[2] = 255 - pixel[2];
-            }
+        for l in &mut self.layers {
+            for p in l.pixels.pixels_mut() { p[0] = 255 - p[0]; p[1] = 255 - p[1]; p[2] = 255 - p[2]; }
         }
         self.mark_dirty();
     }
 
     pub fn crop_to(&mut self, x: u32, y: u32, w: u32, h: u32) {
-        if let Some(buf) = self.get_active_raster_buffer_mut() {
-            use image::GenericImageView;
-            *buf = buf.view(x, y, w, h).to_image();
-        }
+        use image::GenericImageView;
+        for l in &mut self.layers { l.pixels = l.pixels.view(x, y, w, h).to_image(); }
         self.width = w;
         self.height = h;
         self.selection = None;
@@ -337,26 +320,14 @@ impl ImageStore {
     pub fn merge_down(&mut self) {
         let idx = self.active_layer;
         if idx == 0 || self.layers.len() < 2 { return; }
-
-        // composite active layer onto the one below
         let above = self.layers[idx].clone();
-        let below = &mut self.layers[idx - 1];
-
-        let src = &above.pixels;
-        let dst = &mut below.pixels;
-        for (x, y, sp) in src.enumerate_pixels() {
-            if sp[3] == 0 { continue; }
-            let src_a = (sp[3] as f32 / 255.0) * above.opacity;
-            let dp = dst.get_pixel(x, y);
-            let dst_a = dp[3] as f32 / 255.0;
-            let out_a = src_a + dst_a * (1.0 - src_a);
-            if out_a == 0.0 { continue; }
-            let blend = |s: u8, d: u8| -> u8 {
-                ((s as f32 * src_a + d as f32 * dst_a * (1.0 - src_a)) / out_a).clamp(0.0, 255.0) as u8
-            };
-            dst.put_pixel(x, y, image::Rgba([blend(sp[0],dp[0]),blend(sp[1],dp[1]),blend(sp[2],dp[2]),(out_a*255.0) as u8]));
+        if above.visible {
+            let opacity = above.opacity;
+            let blend = above.blend;
+            let src = above.pixels.clone();
+            let dst = &mut self.layers[idx - 1].pixels;
+            Self::blend_buffer_static(dst, &src, opacity, blend, None);
         }
-
         self.layers.remove(idx);
         self.active_layer = idx - 1;
         self.mark_dirty();
@@ -474,5 +445,25 @@ mod tests {
         stack.jump_to(2, &mut s); // redo all
         assert_eq!(s.layers.len(), 2);
         assert_eq!(s.layers[0].pixels.get_pixel(0, 0)[0], 0);
+    }
+
+    #[test]
+    fn rotate_cw_swaps_dims_for_all_layers() {
+        use image::GenericImageView;
+        let mut s = ImageStore::new(3, 2);
+        s.add_layer(Layer::new_raster(3, 2, "b".into()));
+        s.rotate90_cw();
+        assert_eq!((s.width(), s.height()), (2, 3));
+        for l in &s.layers { assert_eq!(l.pixels.dimensions(), (2, 3)); }
+    }
+
+    #[test]
+    fn crop_resizes_all_layers() {
+        use image::GenericImageView;
+        let mut s = ImageStore::new(4, 4);
+        s.add_layer(Layer::new_raster(4, 4, "b".into()));
+        s.crop_to(1, 1, 2, 2);
+        assert_eq!((s.width(), s.height()), (2, 2));
+        for l in &s.layers { assert_eq!(l.pixels.dimensions(), (2, 2)); }
     }
 }
