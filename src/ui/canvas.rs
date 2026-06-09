@@ -238,7 +238,8 @@ impl ArsApp {
                 if input.is_released { self.stamp_floating_selection(); }
             }
 
-            let cmd = if !has_float {
+            let layer_locked = self.state.image.active_layer().map(|l| l.locked).unwrap_or(false);
+            let cmd = if !has_float && !layer_locked {
                 let c = self.state.active_tool.update(
                     &mut self.state.image,
                     &self.state.tool_settings,

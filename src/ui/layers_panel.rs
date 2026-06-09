@@ -97,8 +97,14 @@ impl ArsApp {
 
                         // Alpha lock
                         let al = self.state.image.layers[idx].alpha_locked;
-                        if ui.selectable_label(al, "🔒").on_hover_text("Lock alpha").clicked() {
+                        if ui.selectable_label(al, "▦").on_hover_text("Lock alpha (transparency)").clicked() {
                             self.state.image.layers[idx].alpha_locked = !al;
+                        }
+
+                        // Layer lock
+                        let locked = self.state.image.layers[idx].locked;
+                        if ui.selectable_label(locked, "🔒").on_hover_text("Lock layer (no edits)").clicked() {
+                            self.state.image.layers[idx].locked = !locked;
                         }
 
                         // Clip to below
