@@ -159,16 +159,14 @@ impl ArsApp {
     }
 
     fn stamp_floating_selection(&mut self) {
-        if let Some(fs) = self.state.floating_selection.take() {
-            let x = fs.pos.x as i32;
-            let y = fs.pos.y as i32;
-            let iw = self.state.image.width() as i32;
-            let ih = self.state.image.height() as i32;
-            if let Some(buf) = self.state.image.get_active_raster_buffer_mut() {
+        let Some(fs) = self.state.floating_selection.take() else { return; };
+        let cmd = self.state.image.edit("Paste", |img| {
+            let (iw, ih) = (img.width() as i32, img.height() as i32);
+            if let Some(buf) = img.get_active_raster_buffer_mut() {
+                use image::GenericImageView;
                 for py in 0..fs.image.height() as i32 {
                     for px in 0..fs.image.width() as i32 {
-                        let tx = x + px;
-                        let ty = y + py;
+                        let (tx, ty) = (fs.pos.x as i32 + px, fs.pos.y as i32 + py);
                         if tx >= 0 && tx < iw && ty >= 0 && ty < ih {
                             let p = *fs.image.get_pixel(px as u32, py as u32);
                             if p[3] > 0 { buf.put_pixel(tx as u32, ty as u32, p); }
@@ -176,9 +174,9 @@ impl ArsApp {
                     }
                 }
             }
-            self.state.image.mark_dirty();
-            self.image_dirty = true;
-        }
+        });
+        self.state.command_stack.push(cmd);
+        self.image_dirty = true;
     }
 
     fn do_select_all(&mut self) {
@@ -189,23 +187,26 @@ impl ArsApp {
     }
 
     fn do_copy(&mut self) {
-        let snapshot = self.state.image.get_active_raster_snapshot();
-        if let Some(buf) = snapshot {
-            if let Some(mask) = &self.state.image.selection {
-                // copy only selected region bounding box
-                let mut min_x = u32::MAX; let mut min_y = u32::MAX;
-                let mut max_x = 0u32; let mut max_y = 0u32;
-                for (x, y, p) in mask.enumerate_pixels() {
-                    if p[0] > 0 { min_x=min_x.min(x); min_y=min_y.min(y); max_x=max_x.max(x); max_y=max_y.max(y); }
-                }
-                if max_x >= min_x && max_y >= min_y {
-                    let w = max_x - min_x + 1;
-                    let h = max_y - min_y + 1;
-                    self.state.clipboard = Some(buf.view(min_x, min_y, w, h).to_image());
-                }
-            } else {
-                self.state.clipboard = Some(buf);
+        let Some(buf) = self.state.image.get_active_raster_snapshot() else { return; };
+        if let Some(mask) = &self.state.image.selection {
+            let mut min_x = u32::MAX; let mut min_y = u32::MAX; let mut max_x = 0u32; let mut max_y = 0u32;
+            for (x, y, p) in mask.enumerate_pixels() {
+                if p[0] > 0 { min_x = min_x.min(x); min_y = min_y.min(y); max_x = max_x.max(x); max_y = max_y.max(y); }
             }
+            if max_x < min_x || max_y < min_y { return; }
+            let (w, h) = (max_x - min_x + 1, max_y - min_y + 1);
+            let mut out = image::RgbaImage::new(w, h);
+            for y in 0..h {
+                for x in 0..w {
+                    let (sx, sy) = (min_x + x, min_y + y);
+                    if mask.get_pixel(sx, sy)[0] > 0 {
+                        out.put_pixel(x, y, *buf.get_pixel(sx, sy));
+                    }
+                }
+            }
+            self.state.clipboard = Some(out);
+        } else {
+            self.state.clipboard = Some(buf);
         }
     }
 
@@ -221,16 +222,16 @@ impl ArsApp {
     }
 
     fn do_delete_selection(&mut self) {
-        let color2 = self.state.color2;
-        if let Some(mask) = &self.state.image.selection.clone() {
-            if let Some(buf) = self.state.image.get_active_raster_buffer_mut() {
+        let Some(mask) = self.state.image.selection.clone() else { return; };
+        let cmd = self.state.image.edit("Delete", |img| {
+            if let Some(buf) = img.get_active_raster_buffer_mut() {
                 for (x, y, p) in mask.enumerate_pixels() {
-                    if p[0] > 0 { buf.put_pixel(x, y, color2); }
+                    if p[0] > 0 { buf.put_pixel(x, y, image::Rgba([0, 0, 0, 0])); }
                 }
             }
-            self.state.image.mark_dirty();
-            self.image_dirty = true;
-        }
+        });
+        self.state.command_stack.push(cmd);
+        self.image_dirty = true;
     }
 
     fn do_crop(&mut self) {
