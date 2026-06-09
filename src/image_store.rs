@@ -4,6 +4,15 @@ use image::{ImageBuffer, Pixel, Rgba, RgbaImage};
 use std::path::Path;
 
 #[derive(Clone)]
+pub struct DocSnapshot {
+    pub layers: Vec<Layer>,
+    pub width: u32,
+    pub height: u32,
+    pub active: usize,
+    pub selection: Option<image::GrayImage>,
+}
+
+#[derive(Clone)]
 pub struct ImageStore {
     width: u32,
     height: u32,
@@ -356,6 +365,34 @@ impl ImageStore {
     pub fn get_active_raster_snapshot(&self) -> Option<RgbaImage> {
         self.layers.get(self.active_layer).map(|l| l.pixels.clone())
     }
+
+    pub fn snapshot(&self) -> DocSnapshot {
+        DocSnapshot {
+            layers: self.layers.clone(),
+            width: self.width,
+            height: self.height,
+            active: self.active_layer,
+            selection: self.selection.clone(),
+        }
+    }
+
+    pub fn restore_snapshot(&mut self, s: &DocSnapshot) {
+        self.layers = s.layers.clone();
+        self.width = s.width;
+        self.height = s.height;
+        self.active_layer = s.active;
+        self.selection = s.selection.clone();
+        self.composite = ImageBuffer::new(self.width, self.height);
+        self.mark_dirty();
+    }
+
+    /// Run a coarse mutation and capture it as an undoable SnapshotCommand.
+    pub fn edit(&mut self, label: &str, f: impl FnOnce(&mut Self)) -> Box<dyn crate::commands::Command> {
+        let before = self.snapshot();
+        f(self);
+        let after = self.snapshot();
+        Box::new(crate::commands::SnapshotCommand { name: label.to_string(), before, after })
+    }
 }
 
 #[cfg(test)]
@@ -397,5 +434,45 @@ mod tests {
         black.visible = false;
         s.add_layer(black);
         assert_eq!(s.get_composite().get_pixel(0, 0)[0], 255);
+    }
+
+    #[test]
+    fn edit_snapshot_undo_redo_round_trips() {
+        let mut s = ImageStore::new(2, 2);
+        let n0 = s.layers.len();
+        let cmd = s.edit("Add layer", |s| s.add_layer(Layer::new_raster(2, 2, "x".into())));
+        assert_eq!(s.layers.len(), n0 + 1);
+        cmd.undo(&mut s);
+        assert_eq!(s.layers.len(), n0);
+        cmd.redo(&mut s);
+        assert_eq!(s.layers.len(), n0 + 1);
+    }
+
+    #[test]
+    fn mixed_patch_and_snapshot_history_jumps_cleanly() {
+        use crate::commands::{CommandStack, PatchCommand};
+        use image::{GenericImage, GenericImageView};
+        let mut s = ImageStore::new(2, 2); // white
+        let mut stack = CommandStack::new();
+
+        // 1) a stroke: paint pixel (0,0) black, recorded as a 1x1 PatchCommand
+        let before = s.layers[0].pixels.view(0, 0, 1, 1).to_image();
+        s.layers[0].pixels.put_pixel(0, 0, Rgba([0, 0, 0, 255]));
+        let after = s.layers[0].pixels.view(0, 0, 1, 1).to_image();
+        stack.push(Box::new(PatchCommand { name: "Stroke".into(), layer_index: 0, x: 0, y: 0, old_patch: before, new_patch: after }));
+
+        // 2) a coarse op: add a layer, recorded as a SnapshotCommand
+        stack.push(s.edit("Add", |s| s.add_layer(Layer::new_raster(2, 2, "x".into()))));
+
+        assert_eq!(s.layers.len(), 2);
+        assert_eq!(s.layers[0].pixels.get_pixel(0, 0)[0], 0);
+
+        stack.jump_to(0, &mut s); // before everything
+        assert_eq!(s.layers.len(), 1);
+        assert_eq!(s.layers[0].pixels.get_pixel(0, 0)[0], 255);
+
+        stack.jump_to(2, &mut s); // redo all
+        assert_eq!(s.layers.len(), 2);
+        assert_eq!(s.layers[0].pixels.get_pixel(0, 0)[0], 0);
     }
 }

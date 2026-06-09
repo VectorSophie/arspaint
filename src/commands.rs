@@ -105,6 +105,20 @@ impl Command for PatchCommand {
     }
 }
 
+/// A full before/after snapshot of mutable document state, for coarse operations
+/// (resize, rotate, crop, layer add/delete/merge, paste, delete, …).
+pub struct SnapshotCommand {
+    pub name: String,
+    pub before: crate::image_store::DocSnapshot,
+    pub after: crate::image_store::DocSnapshot,
+}
+
+impl Command for SnapshotCommand {
+    fn name(&self) -> &str { &self.name }
+    fn undo(&self, image: &mut ImageStore) { image.restore_snapshot(&self.before); }
+    fn redo(&self, image: &mut ImageStore) { image.restore_snapshot(&self.after); }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
