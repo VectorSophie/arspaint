@@ -11,44 +11,60 @@ impl ArsApp {
             if ui.button("＋").on_hover_text("Add raster layer").clicked() {
                 let (w, h) = (self.state.image.width(), self.state.image.height());
                 let n = self.state.image.layers.len() + 1;
-                self.state.image.add_layer(Layer::new_raster(w, h, format!("Layer {}", n)));
+                let cmd = self.state.image.edit("Add layer", |img| {
+                    img.add_layer(Layer::new_raster(w, h, format!("Layer {}", n)));
+                });
+                self.state.command_stack.push(cmd);
                 self.image_dirty = true;
             }
             let can_delete = self.state.image.layers.len() > 1;
             if ui.add_enabled(can_delete, egui::Button::new("✕")).on_hover_text("Delete layer").clicked() {
                 let idx = self.state.image.active_layer;
-                self.state.image.layers.remove(idx);
-                self.state.image.active_layer = idx.saturating_sub(1).min(self.state.image.layers.len() - 1);
-                self.state.image.mark_dirty();
+                let cmd = self.state.image.edit("Delete layer", |img| {
+                    img.layers.remove(idx);
+                    img.active_layer = idx.saturating_sub(1).min(img.layers.len() - 1);
+                    img.mark_dirty();
+                });
+                self.state.command_stack.push(cmd);
                 self.image_dirty = true;
             }
             let can_up = self.state.image.active_layer + 1 < self.state.image.layers.len();
             if ui.add_enabled(can_up, egui::Button::new("↑")).on_hover_text("Move up").clicked() {
                 let idx = self.state.image.active_layer;
-                self.state.image.layers.swap(idx, idx + 1);
-                self.state.image.active_layer = idx + 1;
-                self.state.image.mark_dirty();
+                let cmd = self.state.image.edit("Move layer up", |img| {
+                    img.layers.swap(idx, idx + 1);
+                    img.active_layer = idx + 1;
+                    img.mark_dirty();
+                });
+                self.state.command_stack.push(cmd);
                 self.image_dirty = true;
             }
             let can_down = self.state.image.active_layer > 0;
             if ui.add_enabled(can_down, egui::Button::new("↓")).on_hover_text("Move down").clicked() {
                 let idx = self.state.image.active_layer;
-                self.state.image.layers.swap(idx, idx - 1);
-                self.state.image.active_layer = idx - 1;
-                self.state.image.mark_dirty();
+                let cmd = self.state.image.edit("Move layer down", |img| {
+                    img.layers.swap(idx, idx - 1);
+                    img.active_layer = idx - 1;
+                    img.mark_dirty();
+                });
+                self.state.command_stack.push(cmd);
                 self.image_dirty = true;
             }
             if ui.button("⎘").on_hover_text("Duplicate layer").clicked() {
                 let idx = self.state.image.active_layer;
-                let clone = self.state.image.layers[idx].clone();
-                self.state.image.layers.insert(idx + 1, clone);
-                self.state.image.active_layer = idx + 1;
-                self.state.image.mark_dirty();
+                let cmd = self.state.image.edit("Duplicate layer", |img| {
+                    let clone = img.layers[idx].clone();
+                    img.layers.insert(idx + 1, clone);
+                    img.active_layer = idx + 1;
+                    img.mark_dirty();
+                });
+                self.state.command_stack.push(cmd);
                 self.image_dirty = true;
             }
             let can_merge = self.state.image.active_layer > 0;
             if ui.add_enabled(can_merge, egui::Button::new("⇩")).on_hover_text("Merge down").clicked() {
-                self.state.image.merge_down();
+                let cmd = self.state.image.edit("Merge down", |img| img.merge_down());
+                self.state.command_stack.push(cmd);
                 self.image_dirty = true;
             }
         });

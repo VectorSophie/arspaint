@@ -79,7 +79,10 @@ impl ArsApp {
                 if ui.button("Add layer").clicked() {
                     let (w, h) = (self.state.image.width(), self.state.image.height());
                     let n = self.state.image.layers.len() + 1;
-                    self.state.image.add_layer(crate::layers::Layer::new_raster(w, h, format!("Layer {}", n)));
+                    let cmd = self.state.image.edit("Add layer", |img| {
+                        img.add_layer(crate::layers::Layer::new_raster(w, h, format!("Layer {}", n)));
+                    });
+                    self.state.command_stack.push(cmd);
                     self.image_dirty = true; ui.close_menu();
                 }
             });
