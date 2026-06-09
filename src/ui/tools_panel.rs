@@ -36,8 +36,14 @@ impl ArsApp {
                 ("▭", "Rectangle", Some(|w, h| Box::new(RectangleTool::new(w, h)) as Box<dyn Tool>)),
                 ("◯", "Ellipse", Some(|w, h| Box::new(EllipseTool::new(w, h)) as Box<dyn Tool>)),
             ]),
-            ("More shapes", &[
+            ("Shapes", &[
                 ("△", "Shape", Some(|w, h| Box::new(ShapeTool::new(ShapeKind::Triangle, w, h)) as Box<dyn Tool>)),
+                ("◺", "Shape", Some(|w, h| Box::new(ShapeTool::new(ShapeKind::RightTriangle, w, h)) as Box<dyn Tool>)),
+                ("◇", "Shape", Some(|w, h| Box::new(ShapeTool::new(ShapeKind::Diamond, w, h)) as Box<dyn Tool>)),
+                ("⬠", "Shape", Some(|w, h| Box::new(ShapeTool::new(ShapeKind::Pentagon, w, h)) as Box<dyn Tool>)),
+                ("⬡", "Shape", Some(|w, h| Box::new(ShapeTool::new(ShapeKind::Hexagon, w, h)) as Box<dyn Tool>)),
+                ("✦", "Shape", Some(|w, h| Box::new(ShapeTool::new(ShapeKind::Star4, w, h)) as Box<dyn Tool>)),
+                ("✡", "Shape", Some(|w, h| Box::new(ShapeTool::new(ShapeKind::Star6, w, h)) as Box<dyn Tool>)),
             ]),
         ];
 

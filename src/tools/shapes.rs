@@ -8,11 +8,7 @@ use image::{GenericImage, GenericImageView, ImageBuffer, Rgba, RgbaImage};
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum ShapeKind {
     Triangle, RightTriangle, Diamond, Pentagon, Hexagon,
-    ArrowRight, ArrowLeft, ArrowUp, ArrowDown,
-    Arrow4Way, ArrowLeftRight, ArrowUpDown,
     Star4, Star6,
-    CalloutRect, CalloutOval, CalloutCloud,
-    Heart, Polygon,
 }
 
 pub struct ShapeTool {
@@ -21,9 +17,6 @@ pub struct ShapeTool {
     start: Option<Pos2>,
     current: Option<Pos2>,
     dirty_rect: Option<Rect>,
-    // polygon specific
-    poly_verts: Vec<Pos2>,
-    poly_active: bool,
 }
 
 impl ShapeTool {
@@ -34,8 +27,6 @@ impl ShapeTool {
             start: None,
             current: None,
             dirty_rect: None,
-            poly_verts: Vec::new(),
-            poly_active: false,
         }
     }
 
@@ -71,58 +62,6 @@ impl ShapeTool {
             ShapeKind::Hexagon   => reg_poly(6, 0.0),
             ShapeKind::Star4 => star(4, 0.4),
             ShapeKind::Star6 => star(6, 0.5),
-            ShapeKind::ArrowRight => {
-                let mx = x0 + rx * 0.5;
-                vec![[x0,cy-ry*0.35],[mx,cy-ry*0.35],[mx,y0],[x1,cy],[mx,y1],[mx,cy+ry*0.35],[x0,cy+ry*0.35]]
-            }
-            ShapeKind::ArrowLeft => {
-                let mx = cx + rx * 0.5;
-                vec![[x1,cy-ry*0.35],[mx,cy-ry*0.35],[mx,y0],[x0,cy],[mx,y1],[mx,cy+ry*0.35],[x1,cy+ry*0.35]]
-            }
-            ShapeKind::ArrowUp => {
-                let my = cy + ry * 0.5;
-                vec![[cx-rx*0.35,y1],[cx-rx*0.35,my],[x0,my],[cx,y0],[x1,my],[cx+rx*0.35,my],[cx+rx*0.35,y1]]
-            }
-            ShapeKind::ArrowDown => {
-                let my = cy - ry * 0.5;
-                vec![[cx-rx*0.35,y0],[cx-rx*0.35,my],[x0,my],[cx,y1],[x1,my],[cx+rx*0.35,my],[cx+rx*0.35,y0]]
-            }
-            ShapeKind::ArrowLeftRight => {
-                let lx = x0 + rx * 0.4;
-                let rx2 = x1 - rx * 0.4;
-                vec![[x0,cy],[lx,y0],[lx,cy-ry*0.35],[rx2,cy-ry*0.35],[rx2,y0],[x1,cy],[rx2,y1],[rx2,cy+ry*0.35],[lx,cy+ry*0.35],[lx,y1]]
-            }
-            ShapeKind::ArrowUpDown => {
-                let ty = y0 + ry * 0.4;
-                let by = y1 - ry * 0.4;
-                vec![[cx,y0],[x1,ty],[cx+rx*0.35,ty],[cx+rx*0.35,by],[x1,by],[cx,y1],[x0,by],[cx-rx*0.35,by],[cx-rx*0.35,ty],[x0,ty]]
-            }
-            ShapeKind::Arrow4Way => {
-                let f = 0.35_f32;
-                let g = 0.5_f32;
-                vec![
-                    [cx,y0],[cx+rx*f,cy-ry*g],[cx+rx*f,cy-ry*f],
-                    [cx+rx*g,cy-ry*f],[cx+rx,cy],[cx+rx*g,cy+ry*f],
-                    [cx+rx*f,cy+ry*f],[cx+rx*f,cy+ry*g],[cx,y1],
-                    [cx-rx*f,cy+ry*g],[cx-rx*f,cy+ry*f],[cx-rx*g,cy+ry*f],
-                    [x0,cy],[cx-rx*g,cy-ry*f],[cx-rx*f,cy-ry*f],[cx-rx*f,cy-ry*g],
-                ]
-            }
-            ShapeKind::Heart => {
-                let mut pts = Vec::new();
-                let steps = 60u32;
-                for i in 0..steps {
-                    let t = i as f32 / steps as f32 * std::f32::consts::TAU;
-                    let hx = t.sin().powi(3);
-                    let hy = -(0.8125*t.cos() - 0.3125*(2.0*t).cos() - 0.125*(3.0*t).cos() - 0.0625*(4.0*t).cos());
-                    pts.push([cx + rx * hx, cy + ry * hy]);
-                }
-                pts
-            }
-            ShapeKind::CalloutRect | ShapeKind::CalloutOval | ShapeKind::CalloutCloud | ShapeKind::Polygon => {
-                // polygon handled separately; callouts use rect/oval body + tail
-                vec![[x0,y0],[x1,y0],[x1,y1],[x0,y1]]
-            }
         }
     }
 
@@ -245,39 +184,8 @@ impl ShapeTool {
         let lw = settings.stroke_size.px() / 2.0;
         let fill = settings.shape_fill_mode;
 
-        match self.kind {
-            ShapeKind::CalloutRect => {
-                let tail = [[x0 + (x1-x0)*0.3, y1], [x0 + (x1-x0)*0.5, y1 + (y1-y0)*0.3], [x0 + (x1-x0)*0.7, y1]];
-                let pts = [[x0,y0],[x1,y0],[x1,y1-0.0],[x0+(x1-x0)*0.7,y1],[x0+(x1-x0)*0.5,y1+(y1-y0)*0.3],[x0+(x1-x0)*0.3,y1],[x0,y1]];
-                Self::rasterize_polygon(&mut self.layer, &pts, color, fill, lw, &mut self.dirty_rect);
-            }
-            ShapeKind::CalloutOval => {
-                Self::rasterize_ellipse(&mut self.layer, x0, y0, x1, y1*0.85, color, fill, lw, &mut self.dirty_rect);
-                let tail = [[x0+(x1-x0)*0.35, y1*0.85], [x0+(x1-x0)*0.45, y1], [x0+(x1-x0)*0.55, y1*0.85]];
-                Self::rasterize_polygon(&mut self.layer, &tail, color, FillMode::Fill, lw, &mut self.dirty_rect);
-            }
-            ShapeKind::CalloutCloud => {
-                // Approximate with overlapping ellipses
-                let bumps = 5u32;
-                for i in 0..bumps {
-                    let t = i as f32 / bumps as f32;
-                    let bx = x0 + (x1-x0) * t;
-                    let bw = (x1-x0) / bumps as f32;
-                    let by = y0 - bw * 0.2;
-                    Self::rasterize_ellipse(&mut self.layer, bx, by, bx+bw, by+bw*0.8, color, FillMode::Fill, 1.0, &mut self.dirty_rect);
-                }
-                // body
-                Self::rasterize_ellipse(&mut self.layer, x0, y0+( y1-y0)*0.2, x1, y1, color, fill, lw, &mut self.dirty_rect);
-                // tail
-                let tail = [[x0+(x1-x0)*0.35, y1], [x0+(x1-x0)*0.45, y1+(y1-y0)*0.3], [x0+(x1-x0)*0.55, y1]];
-                Self::rasterize_polygon(&mut self.layer, &tail, color, FillMode::Fill, 1.0, &mut self.dirty_rect);
-            }
-            ShapeKind::Polygon => {} // handled separately
-            _ => {
-                let pts = Self::shape_points(self.kind, x0, y0, x1, y1);
-                Self::rasterize_polygon(&mut self.layer, &pts, color, fill, lw, &mut self.dirty_rect);
-            }
-        }
+        let pts = Self::shape_points(self.kind, x0, y0, x1, y1);
+        Self::rasterize_polygon(&mut self.layer, &pts, color, fill, lw, &mut self.dirty_rect);
     }
 
     fn commit(&mut self, image: &mut ImageStore) -> Option<Box<dyn Command>> {
@@ -326,34 +234,6 @@ impl Tool for ShapeTool {
     ) -> Option<Box<dyn Command>> {
         if self.layer.width() != image.width() || self.layer.height() != image.height() {
             self.layer = ImageBuffer::new(image.width(), image.height());
-        }
-
-        if self.kind == ShapeKind::Polygon {
-            // Polygon: click adds vertices, double-click commits
-            if input.is_released {
-                if let Some(pos) = input.pos {
-                    if !self.poly_verts.is_empty() && pos.distance(*self.poly_verts.last().unwrap()) < 4.0 {
-                        // double-click approximation: close polygon
-                        return self.commit(image);
-                    }
-                    self.poly_verts.push(pos);
-                    self.poly_active = true;
-                }
-            }
-            if self.poly_active {
-                // redraw polygon from verts
-                if let Some(rect) = self.dirty_rect {
-                    let x = rect.min.x as u32; let y = rect.min.y as u32;
-                    let w = (rect.width() as u32+1).min(self.layer.width().saturating_sub(x));
-                    let h = (rect.height() as u32+1).min(self.layer.height().saturating_sub(y));
-                    for py in 0..h { for px in 0..w { self.layer.put_pixel(x+px, y+py, Rgba([0,0,0,0])); } }
-                }
-                self.dirty_rect = None;
-                let pts: Vec<[f32;2]> = self.poly_verts.iter().map(|p| [p.x, p.y]).collect();
-                let lw = settings.stroke_size.px() / 2.0;
-                Self::rasterize_polygon(&mut self.layer, &pts, color, settings.shape_fill_mode, lw, &mut self.dirty_rect);
-            }
-            return None;
         }
 
         let shift = false; // shift handled by caller via constrain
