@@ -18,7 +18,6 @@ use eframe::egui::{
     self, Context, Pos2, TextureOptions, Vec2,
 };
 use eframe::Frame;
-use image::GenericImageView;
 
 pub struct ArsApp {
     state: AppState,
@@ -161,7 +160,6 @@ impl ArsApp {
         let cmd = self.state.image.edit("Paste", |img| {
             let (iw, ih) = (img.width() as i32, img.height() as i32);
             if let Some(buf) = img.get_active_raster_buffer_mut() {
-                use image::GenericImageView;
                 for py in 0..fs.image.height() as i32 {
                     for px in 0..fs.image.width() as i32 {
                         let (tx, ty) = (fs.pos.x as i32 + px, fs.pos.y as i32 + py);
