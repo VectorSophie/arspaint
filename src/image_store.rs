@@ -97,19 +97,7 @@ impl ImageStore {
         if !self.composite_dirty {
             return;
         }
-
-        // Clear composite
-        self.composite =
-            ImageBuffer::from_pixel(self.width, self.height, Rgba([200, 200, 200, 255])); // Checkerboard fallback?
-                                                                                          // Actually, let's start transparent
-        for p in self.composite.pixels_mut() {
-            *p = Rgba([0, 0, 0, 0]);
-        }
-
-        let dest = &mut self.composite;
-        let layers = &self.layers;
-
-        Self::composite_layers(dest, layers);
+        Self::composite_layers(&mut self.composite, &self.layers);
         self.composite_dirty = false;
     }
 
@@ -367,5 +355,47 @@ impl ImageStore {
 
     pub fn get_active_raster_snapshot(&self) -> Option<RgbaImage> {
         self.layers.get(self.active_layer).map(|l| l.pixels.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layers::{BlendMode, Layer};
+
+    fn solid(w: u32, h: u32, px: Rgba<u8>) -> Layer {
+        let mut l = Layer::new_raster(w, h, "l".into());
+        for p in l.pixels.pixels_mut() { *p = px; }
+        l
+    }
+
+    #[test]
+    fn opacity_blends_black_over_white() {
+        let mut s = ImageStore::new(1, 1); // layer 0 = opaque white
+        let mut black = solid(1, 1, Rgba([0, 0, 0, 255]));
+        black.opacity = 0.5;
+        s.add_layer(black);
+        let c = s.get_composite().get_pixel(0, 0)[0];
+        assert!((120..=135).contains(&c), "got {c}");
+    }
+
+    #[test]
+    fn multiply_darkens() {
+        let mut s = ImageStore::new(1, 1);
+        for p in s.layers[0].pixels.pixels_mut() { *p = Rgba([128, 128, 128, 255]); }
+        let mut grey = solid(1, 1, Rgba([128, 128, 128, 255]));
+        grey.blend = BlendMode::Multiply;
+        s.add_layer(grey);
+        let c = s.get_composite().get_pixel(0, 0)[0];
+        assert!((60..=70).contains(&c), "got {c}");
+    }
+
+    #[test]
+    fn hidden_layer_is_skipped() {
+        let mut s = ImageStore::new(1, 1);
+        let mut black = solid(1, 1, Rgba([0, 0, 0, 255]));
+        black.visible = false;
+        s.add_layer(black);
+        assert_eq!(s.get_composite().get_pixel(0, 0)[0], 255);
     }
 }
