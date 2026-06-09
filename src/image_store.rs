@@ -1,4 +1,4 @@
-use crate::layers::{BlendMode, Layer, LayerData};
+use crate::layers::{BlendMode, Layer};
 use anyhow::{Context, Result};
 use image::{ImageBuffer, Pixel, Rgba, RgbaImage};
 use std::path::Path;
@@ -31,10 +31,8 @@ impl ImageStore {
         };
 
         // Fill first layer with white
-        if let LayerData::Raster(ref mut img) = store.layers[0].data {
-            for pixel in img.pixels_mut() {
-                *pixel = Rgba([255, 255, 255, 255]);
-            }
+        for pixel in store.layers[0].pixels.pixels_mut() {
+            *pixel = Rgba([255, 255, 255, 255]);
         }
         store.composite();
         store
@@ -54,7 +52,7 @@ impl ImageStore {
             clipped: false,
             opacity: 1.0,
             blend: BlendMode::Normal,
-            data: LayerData::Raster(buffer),
+            pixels: buffer,
         };
 
         let mut store = Self {
@@ -108,40 +106,6 @@ impl ImageStore {
             *p = Rgba([0, 0, 0, 0]);
         }
 
-        let mut i = 0;
-        while i < self.layers.len() {
-            // Need to decoupling borrowing of self from layer
-            // We can clone properties needed for blending
-            let (visible, opacity, blend, data) = {
-                let layer = &self.layers[i];
-                (layer.visible, layer.opacity, layer.blend, &layer.data)
-            };
-
-            if visible {
-                match data {
-                    LayerData::Raster(img) => {
-                        // Safe because we are not borrowing self.layers anymore, but we need img reference
-                        // Uh oh, `data` borrows from `self.layers`.
-                        // But `blend_buffer` borrows `self.composite` (mut).
-                        // Rust won't like `self.layers` (immutable) and `self.composite` (part of self, mutable) being borrowed same time.
-                        // We need to split ImageStore or use interior mutability or unsafe.
-                        // OR: clone the buffer? Too slow.
-                        // Better: Iterate over indices, and get references strictly.
-                        // Actually, `composite` field is disjoint from `layers`.
-                        // But the method takes `&mut self`.
-
-                        // Workaround: Temporarily take composite out of self?
-                        // Or pass `&mut composite` and `&layers` to a static function.
-                    }
-                    _ => {}
-                }
-            }
-            i += 1;
-        }
-
-        // Let's refactor composite to be a static-like method that takes the dest and source layers
-        // to avoid self-borrow conflicts.
-
         let dest = &mut self.composite;
         let layers = &self.layers;
 
@@ -161,24 +125,11 @@ impl ImageStore {
             }
 
             let mask = if layer.clipped && i > 0 {
-                match &layers[i - 1].data {
-                    LayerData::Raster(img) => Some(img),
-                    LayerData::Tone { buffer, .. } => Some(buffer),
-                    _ => None,
-                }
+                Some(&layers[i - 1].pixels)
             } else {
                 None
             };
-
-            match &layer.data {
-                LayerData::Raster(img) => {
-                    Self::blend_buffer_static(dest, img, layer.opacity, layer.blend, mask)
-                }
-                LayerData::Tone { buffer, .. } => {
-                    Self::blend_buffer_static(dest, buffer, layer.opacity, layer.blend, mask)
-                }
-                _ => {}
-            }
+            Self::blend_buffer_static(dest, &layer.pixels, layer.opacity, layer.blend, mask);
         }
     }
 
@@ -266,15 +217,7 @@ impl ImageStore {
     // API for tools to get raw buffer of active layer
     // Returns None if active layer is not Raster
     pub fn get_active_raster_buffer_mut(&mut self) -> Option<&mut RgbaImage> {
-        if let Some(layer) = self.active_layer_mut() {
-            match &mut layer.data {
-                LayerData::Raster(img) => Some(img),
-                LayerData::Tone { buffer, .. } => Some(buffer),
-                _ => None,
-            }
-        } else {
-            None
-        }
+        self.active_layer_mut().map(|layer| &mut layer.pixels)
     }
 
     pub fn mark_dirty(&mut self) {
@@ -287,36 +230,20 @@ impl ImageStore {
         }
 
         for (idx, layer) in self.layers.iter_mut().enumerate() {
-            match &mut layer.data {
-                LayerData::Raster(ref mut img) => {
-                    let mut new_img = ImageBuffer::new(new_width, new_height);
-                    if idx == 0 {
-                        for p in new_img.pixels_mut() {
-                            *p = Rgba([255, 255, 255, 255]);
-                        }
-                    }
-                    let copy_w = self.width.min(new_width);
-                    let copy_h = self.height.min(new_height);
-                    for y in 0..copy_h {
-                        for x in 0..copy_w {
-                            new_img.put_pixel(x, y, *img.get_pixel(x, y));
-                        }
-                    }
-                    *img = new_img;
+            let mut new_img = ImageBuffer::new(new_width, new_height);
+            if idx == 0 {
+                for p in new_img.pixels_mut() {
+                    *p = Rgba([255, 255, 255, 255]);
                 }
-                LayerData::Tone { ref mut buffer, .. } => {
-                    let mut new_img = ImageBuffer::new(new_width, new_height);
-                    let copy_w = self.width.min(new_width);
-                    let copy_h = self.height.min(new_height);
-                    for y in 0..copy_h {
-                        for x in 0..copy_w {
-                            new_img.put_pixel(x, y, *buffer.get_pixel(x, y));
-                        }
-                    }
-                    *buffer = new_img;
-                }
-                _ => {}
             }
+            let copy_w = self.width.min(new_width);
+            let copy_h = self.height.min(new_height);
+            for y in 0..copy_h {
+                for x in 0..copy_w {
+                    new_img.put_pixel(x, y, *layer.pixels.get_pixel(x, y));
+                }
+            }
+            layer.pixels = new_img;
         }
 
         if let Some(mask) = &mut self.selection {
@@ -418,19 +345,19 @@ impl ImageStore {
         let above = self.layers[idx].clone();
         let below = &mut self.layers[idx - 1];
 
-        if let (LayerData::Raster(src), LayerData::Raster(dst)) = (&above.data, &mut below.data) {
-            for (x, y, sp) in src.enumerate_pixels() {
-                if sp[3] == 0 { continue; }
-                let src_a = (sp[3] as f32 / 255.0) * above.opacity;
-                let dp = dst.get_pixel(x, y);
-                let dst_a = dp[3] as f32 / 255.0;
-                let out_a = src_a + dst_a * (1.0 - src_a);
-                if out_a == 0.0 { continue; }
-                let blend = |s: u8, d: u8| -> u8 {
-                    ((s as f32 * src_a + d as f32 * dst_a * (1.0 - src_a)) / out_a).clamp(0.0, 255.0) as u8
-                };
-                dst.put_pixel(x, y, image::Rgba([blend(sp[0],dp[0]),blend(sp[1],dp[1]),blend(sp[2],dp[2]),(out_a*255.0) as u8]));
-            }
+        let src = &above.pixels;
+        let dst = &mut below.pixels;
+        for (x, y, sp) in src.enumerate_pixels() {
+            if sp[3] == 0 { continue; }
+            let src_a = (sp[3] as f32 / 255.0) * above.opacity;
+            let dp = dst.get_pixel(x, y);
+            let dst_a = dp[3] as f32 / 255.0;
+            let out_a = src_a + dst_a * (1.0 - src_a);
+            if out_a == 0.0 { continue; }
+            let blend = |s: u8, d: u8| -> u8 {
+                ((s as f32 * src_a + d as f32 * dst_a * (1.0 - src_a)) / out_a).clamp(0.0, 255.0) as u8
+            };
+            dst.put_pixel(x, y, image::Rgba([blend(sp[0],dp[0]),blend(sp[1],dp[1]),blend(sp[2],dp[2]),(out_a*255.0) as u8]));
         }
 
         self.layers.remove(idx);
@@ -439,12 +366,6 @@ impl ImageStore {
     }
 
     pub fn get_active_raster_snapshot(&self) -> Option<RgbaImage> {
-        self.layers.get(self.active_layer).and_then(|l| {
-            match &l.data {
-                LayerData::Raster(img) => Some(img.clone()),
-                LayerData::Tone { buffer, .. } => Some(buffer.clone()),
-                _ => None,
-            }
-        })
+        self.layers.get(self.active_layer).map(|l| l.pixels.clone())
     }
 }

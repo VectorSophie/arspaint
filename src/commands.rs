@@ -1,5 +1,4 @@
 use crate::image_store::ImageStore;
-use crate::layers::LayerData;
 use image::{GenericImage, RgbaImage};
 
 pub trait Command {
@@ -95,23 +94,13 @@ impl Command for PatchCommand {
 
     fn undo(&self, image: &mut ImageStore) {
         if let Some(layer) = image.layers.get_mut(self.layer_index) {
-            match &mut layer.data {
-                LayerData::Raster(img) | LayerData::Tone { buffer: img, .. } => {
-                    let _ = img.copy_from(&self.old_patch, self.x, self.y);
-                }
-                _ => {} // Vector undo not implemented in PatchCommand
-            }
+            let _ = layer.pixels.copy_from(&self.old_patch, self.x, self.y);
         }
     }
 
     fn redo(&self, image: &mut ImageStore) {
         if let Some(layer) = image.layers.get_mut(self.layer_index) {
-            match &mut layer.data {
-                LayerData::Raster(img) | LayerData::Tone { buffer: img, .. } => {
-                    let _ = img.copy_from(&self.new_patch, self.x, self.y);
-                }
-                _ => {}
-            }
+            let _ = layer.pixels.copy_from(&self.new_patch, self.x, self.y);
         }
     }
 }

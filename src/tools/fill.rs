@@ -55,18 +55,17 @@ impl Tool for FillTool {
 
                 let selection_clone = image.selection.clone();
                 if let Some(layer) = image.layers.get_mut(layer_index) {
-                    if let crate::layers::LayerData::Raster(ref mut buf) | crate::layers::LayerData::Tone { buffer: ref mut buf, .. } = layer.data {
-                        Self::flood_fill(buf, x, y, color, selection_clone.as_ref());
-                        let new_snapshot = buf.clone();
-                        image.mark_dirty();
-                        return Some(Box::new(PatchCommand {
-                            name: "Fill".to_string(),
-                            layer_index,
-                            x: 0, y: 0,
-                            old_patch: old_snapshot,
-                            new_patch: new_snapshot,
-                        }));
-                    }
+                    let buf = &mut layer.pixels;
+                    Self::flood_fill(buf, x, y, color, selection_clone.as_ref());
+                    let new_snapshot = buf.clone();
+                    image.mark_dirty();
+                    return Some(Box::new(PatchCommand {
+                        name: "Fill".to_string(),
+                        layer_index,
+                        x: 0, y: 0,
+                        old_patch: old_snapshot,
+                        new_patch: new_snapshot,
+                    }));
                 }
             }
         }

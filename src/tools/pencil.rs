@@ -91,7 +91,8 @@ impl Tool for PencilTool {
                 let selection = &image.selection;
 
                 if let Some(layer) = image.layers.get_mut(layer_index) {
-                    if let crate::layers::LayerData::Raster(ref mut target) | crate::layers::LayerData::Tone { buffer: ref mut target, .. } = layer.data {
+                    let target = &mut layer.pixels;
+                    {
                         if w > 0 && h > 0 {
                             let old_patch = target.view(x, y, w, h).to_image();
                             let src_patch = self.layer.view(x, y, w, h).to_image();

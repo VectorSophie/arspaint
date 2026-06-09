@@ -1,6 +1,5 @@
 use crate::commands::{Command, PatchCommand};
 use crate::image_store::ImageStore;
-use crate::layers::LayerData;
 use crate::state::ToolSettings;
 use crate::tools::{Tool, ToolInput};
 use egui::{Color32, Painter, Pos2, Rect, Ui, Vec2};
@@ -68,15 +67,10 @@ impl TransformTool {
                 let mut buffer = ImageBuffer::new(w, h);
 
                 self.layer_index = image.active_layer;
-                let layer_img = match &mut image.layers[self.layer_index].data {
-                    crate::layers::LayerData::Raster(img) => Some(img),
-                    crate::layers::LayerData::Tone { buffer, .. } => Some(buffer),
-                    _ => None,
-                };
+                let layer_img = &mut image.layers[self.layer_index].pixels;
+                self.original_layer_snapshot = Some(layer_img.clone());
 
-                if let Some(layer_img) = layer_img {
-                    self.original_layer_snapshot = Some(layer_img.clone());
-
+                {
                     for y in 0..h {
                         for x in 0..w {
                             let cx = min_x + x;
@@ -123,13 +117,9 @@ impl Tool for TransformTool {
                 let layer_index = self.layer_index;
                 let (w, h) = (image.width(), image.height());
 
-                let target_buffer = match &mut image.layers[layer_index].data {
-                    crate::layers::LayerData::Raster(img) => Some(img),
-                    crate::layers::LayerData::Tone { buffer, .. } => Some(buffer),
-                    _ => None,
-                };
+                let target_buffer = &mut image.layers[layer_index].pixels;
 
-                if let Some(target_buffer) = target_buffer {
+                {
                     let nw = current.width().max(1.0) as u32;
                     let nh = current.height().max(1.0) as u32;
 

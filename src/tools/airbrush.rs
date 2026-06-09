@@ -74,7 +74,8 @@ impl Tool for AirbrushTool {
                 let selection = &image.selection;
 
                 if let Some(layer) = image.layers.get_mut(layer_index) {
-                    if let crate::layers::LayerData::Raster(ref mut target) | crate::layers::LayerData::Tone { buffer: ref mut target, .. } = layer.data {
+                    let target = &mut layer.pixels;
+                    {
                         if w > 0 && h > 0 {
                             use image::GenericImageView;
                             let old_patch = target.view(x, y, w, h).to_image();

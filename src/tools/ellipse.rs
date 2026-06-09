@@ -132,11 +132,7 @@ impl Tool for EllipseTool {
                 let layer = &mut image.layers[layer_index];
                 let alpha_locked = layer.alpha_locked;
 
-                let target_buffer = match &mut layer.data {
-                    crate::layers::LayerData::Raster(img) => Some(img),
-                    crate::layers::LayerData::Tone { buffer, .. } => Some(buffer),
-                    _ => None,
-                };
+                let target_buffer = Some(&mut layer.pixels);
 
                 if let Some(target_buffer) = target_buffer {
                     if w > 0 && h > 0 {
