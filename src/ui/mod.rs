@@ -238,10 +238,12 @@ impl ArsApp {
             let mut min_x = u32::MAX; let mut min_y = u32::MAX;
             let mut max_x = 0u32; let mut max_y = 0u32;
             for (x, y, p) in mask.enumerate_pixels() {
-                if p[0] > 0 { min_x=min_x.min(x); min_y=min_y.min(y); max_x=max_x.max(x); max_y=max_y.max(y); }
+                if p[0] > 0 { min_x = min_x.min(x); min_y = min_y.min(y); max_x = max_x.max(x); max_y = max_y.max(y); }
             }
             if max_x >= min_x && max_y >= min_y {
-                self.state.image.crop_to(min_x, min_y, max_x-min_x+1, max_y-min_y+1);
+                let (x, y, w, h) = (min_x, min_y, max_x - min_x + 1, max_y - min_y + 1);
+                let cmd = self.state.image.edit("Crop", |img| img.crop_to(x, y, w, h));
+                self.state.command_stack.push(cmd);
                 self.image_dirty = true;
             }
         }

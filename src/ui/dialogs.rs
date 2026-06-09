@@ -54,7 +54,8 @@ impl ArsApp {
                     ui.horizontal(|ui| {
                         if ui.button("OK").clicked() {
                             let (w, h) = (self.resize_w.max(1), self.resize_h.max(1));
-                            self.state.image.resize_all_scaled(w, h);
+                            let cmd = self.state.image.edit("Resize", |img| img.resize_all_scaled(w, h));
+                            self.state.command_stack.push(cmd);
                             self.image_dirty = true;
                             self.show_resize_dialog = false;
                         }

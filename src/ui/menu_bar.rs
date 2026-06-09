@@ -43,13 +43,37 @@ impl ArsApp {
                 }
                 if ui.button("Crop to selection").clicked() { self.do_crop(); ui.close_menu(); }
                 ui.separator();
-                if ui.button("Rotate 90° right").clicked() { self.state.image.rotate90_cw(); self.image_dirty = true; ui.close_menu(); }
-                if ui.button("Rotate 90° left").clicked() { self.state.image.rotate90_ccw(); self.image_dirty = true; ui.close_menu(); }
-                if ui.button("Rotate 180°").clicked() { self.state.image.rotate180(); self.image_dirty = true; ui.close_menu(); }
-                if ui.button("Flip horizontal").clicked() { self.state.image.flip_horizontal(); self.image_dirty = true; ui.close_menu(); }
-                if ui.button("Flip vertical").clicked() { self.state.image.flip_vertical(); self.image_dirty = true; ui.close_menu(); }
+                if ui.button("Rotate 90° right").clicked() {
+                    let cmd = self.state.image.edit("Rotate 90° right", |i| i.rotate90_cw());
+                    self.state.command_stack.push(cmd);
+                    self.image_dirty = true; ui.close_menu();
+                }
+                if ui.button("Rotate 90° left").clicked() {
+                    let cmd = self.state.image.edit("Rotate 90° left", |i| i.rotate90_ccw());
+                    self.state.command_stack.push(cmd);
+                    self.image_dirty = true; ui.close_menu();
+                }
+                if ui.button("Rotate 180°").clicked() {
+                    let cmd = self.state.image.edit("Rotate 180°", |i| i.rotate180());
+                    self.state.command_stack.push(cmd);
+                    self.image_dirty = true; ui.close_menu();
+                }
+                if ui.button("Flip horizontal").clicked() {
+                    let cmd = self.state.image.edit("Flip horizontal", |i| i.flip_horizontal());
+                    self.state.command_stack.push(cmd);
+                    self.image_dirty = true; ui.close_menu();
+                }
+                if ui.button("Flip vertical").clicked() {
+                    let cmd = self.state.image.edit("Flip vertical", |i| i.flip_vertical());
+                    self.state.command_stack.push(cmd);
+                    self.image_dirty = true; ui.close_menu();
+                }
                 ui.separator();
-                if ui.button("Invert colors").clicked() { self.state.image.invert_colors(); self.image_dirty = true; ui.close_menu(); }
+                if ui.button("Invert colors").clicked() {
+                    let cmd = self.state.image.edit("Invert colors", |i| i.invert_colors());
+                    self.state.command_stack.push(cmd);
+                    self.image_dirty = true; ui.close_menu();
+                }
             });
             ui.menu_button("Layers", |ui| {
                 if ui.button("Add layer").clicked() {
