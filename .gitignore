@@ -37,3 +37,9 @@ xdg/pinta.desktop
 xdg/pinta.appdata.xml
 .vs
 .vscode
+
+# Leftover artifacts from the legacy Rust tree (see legacy-rust branch) and
+# local skill session data - never part of the Pinta-based ARSPaint v2 tree.
+/target
+.superpowers/
+docs/superpowers/
