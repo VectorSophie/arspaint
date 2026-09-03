@@ -54,7 +54,7 @@ internal sealed class MainWindow
 		this.app = app;
 
 		// Set the human-readable application name, used by e.g. gtk_recent_manager_add_item().
-		GLib.Functions.SetApplicationName (Translations.GetString ("Pinta"));
+		GLib.Functions.SetApplicationName (Translations.GetString ("ARSPaint"));
 	}
 
 	/// <summary>
@@ -342,7 +342,7 @@ internal sealed class MainWindow
 		window_shell = new WindowShell (
 			app,
 			"Pinta.GenericWindow",
-			"Pinta",
+			"ARSPaint",
 			width,
 			height,
 			useMenuBar: IsUsingMenuBar (),

@@ -61,18 +61,18 @@ internal sealed class AboutDialogAction : IActionHandler
 	{
 		using Adw.AboutWindow dialog = Adw.AboutWindow.New ();
 		dialog.TransientFor = chrome.MainWindow;
-		dialog.Title = Translations.GetString ("About Pinta");
-		dialog.ApplicationName = Translations.GetString ("Pinta");
+		dialog.Title = Translations.GetString ("About ARSPaint");
+		dialog.ApplicationName = Translations.GetString ("ARSPaint");
 		dialog.ApplicationIcon = Icons.Pinta;
 		dialog.Version = application_version;
-		dialog.Website = "https://www.pinta-project.com";
-		dialog.Comments = Translations.GetString ("Easily create and edit images");
+		dialog.Website = "https://github.com/VectorSophie/arspaint";
+		dialog.Comments = Translations.GetString ("A Pinta-based drawing editor for direct canvas interaction and fast keyboard-driven workflows");
 		dialog.Copyright = BuildCopyrightText ();
 		dialog.License = BuildLicenseText ();
 		dialog.Developers = authors;
 		dialog.TranslatorCredits = Translations.GetString ("translator-credits");
-		dialog.IssueUrl = "https://github.com/PintaProject/Pinta/issues";
-		dialog.SupportUrl = "https://github.com/PintaProject/Pinta/discussions";
+		dialog.IssueUrl = "https://github.com/VectorSophie/arspaint/issues";
+		dialog.SupportUrl = "https://www.pinta-project.com";
 		await dialog.PresentAsync ();
 	}
 
@@ -80,7 +80,7 @@ internal sealed class AboutDialogAction : IActionHandler
 	{
 		string copyrightText = Translations.GetString ("Copyright");
 		string contributorsText = Translations.GetString ("by Pinta contributors");
-		return $"{copyrightText} (c) 2010-2026 {contributorsText}";
+		return $"ARSPaint is based on Pinta.\n{copyrightText} (c) 2010-2026 {contributorsText}";
 	}
 
 	private static string BuildLicenseText ()
