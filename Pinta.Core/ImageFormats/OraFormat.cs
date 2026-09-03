@@ -32,6 +32,7 @@ using System.IO.Compression;
 using System.Xml;
 using Cairo;
 using GdkPixbuf;
+using Pinta.Core.Ars;
 
 namespace Pinta.Core;
 
@@ -113,6 +114,12 @@ public sealed class OraFormat : IImageImporter, IImageExporter
 				layer.Opacity = double.Parse (GetAttribute (layerElement, "opacity", "1"), GetFormat ());
 				layer.BlendMode = StandardToBlendMode (GetAttribute (layerElement, "composite-op", "svg:src-over"));
 
+				// ARS: restore the optional semantic layer role, if any (docs/architecture.md).
+				// Unknown to other OpenRaster editors, which simply ignore the extra attribute.
+				LayerRole role = LayerRoleExtensions.ParseOraAttributeValue (layerElement.GetAttribute ("arspaint-role"));
+				if (role != LayerRole.Generic)
+					LayerRoleStore.Set (layer, role);
+
 				using Pixbuf pb = Pixbuf.NewFromFile (tmp_file)!; // NRT: only nullable when an error is thrown
 				using Context g = new (layer.Surface);
 				g.DrawPixbuf (pb, (PointD) position);
@@ -174,6 +181,13 @@ public sealed class OraFormat : IImageImporter, IImageExporter
 
 			if (layer.Hidden)
 				writer.WriteAttributeString ("visibility", "hidden");
+
+			// ARS: round-trip the optional semantic layer role as a plain,
+			// non-namespaced attribute. Generic layers write nothing, so an
+			// otherwise-ordinary document has no visible ARSPaint metadata.
+			string? roleValue = LayerRoleStore.Get (layer).OraAttributeValue ();
+			if (roleValue is not null)
+				writer.WriteAttributeString ("arspaint-role", roleValue);
 
 			writer.WriteEndElement ();
 		}

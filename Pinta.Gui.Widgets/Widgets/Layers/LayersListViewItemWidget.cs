@@ -26,7 +26,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Cairo;
 using GObject;
+using Pinta.Ars;
 using Pinta.Core;
+using Pinta.Core.Ars;
 
 namespace Pinta.Gui.Widgets;
 
@@ -50,7 +52,15 @@ public sealed partial class LayersListViewItem
 		UserLayer = userLayer;
 	}
 
-	public string Label => UserLayer?.Name ?? string.Empty;
+	public string Label {
+		get {
+			if (UserLayer is null)
+				return string.Empty;
+
+			string? badge = LayerRoleStore.Get (UserLayer).Badge ();
+			return badge is null ? UserLayer.Name : $"{badge} {UserLayer.Name}";
+		}
+	}
 	public bool Visible => !UserLayer?.Hidden ?? false;
 
 	public ImageSurface BuildThumbnail (
@@ -203,9 +213,13 @@ public sealed class LayersListViewItemWidget : Gtk.Box
 		Gio.Menu propertiesSection = Gio.Menu.New ();
 		propertiesSection.AppendItem (actions.Properties.CreateMenuItem ());
 
+		Gio.Menu roleSection = Gio.Menu.New ();
+		LayerRoleActions.AppendRoleSubmenu (roleSection);
+
 		Gio.Menu menu = Gio.Menu.New ();
 		menu.AppendSection (null, operationsSection);
 		menu.AppendSection (null, flipSection);
+		menu.AppendSection (null, roleSection);
 		menu.AppendSection (null, propertiesSection);
 
 		Gtk.PopoverMenu popover = Gtk.PopoverMenu.NewFromModel (menu);

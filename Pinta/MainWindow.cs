@@ -426,6 +426,10 @@ internal sealed class MainWindow
 		PintaCore.Actions.Window.RegisterActions (app, windowMenu);
 		PintaCore.Actions.Help.RegisterActions (app, helpMenu);
 
+		// ARS: semantic layer roles (docs/architecture.md)
+		Ars.LayerRoleActions.RegisterActions (app);
+		Ars.LayerRoleActions.RegisterHandlers ();
+
 		PintaCore.Chrome.InitializeMainMenu (adjustmentsMenu, effectsMenu);
 
 		// --- References to keep
