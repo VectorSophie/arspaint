@@ -99,13 +99,61 @@ These are real, in this codebase now - not proposed:
 | ARS UI in the layers panel | `LayersListViewItemWidget` (context menu, label) |
 | App bootstrap / global registration | `Pinta/MainWindow.cs`, next to the existing `PintaCore.Actions.*.RegisterActions` calls |
 
+## Implemented: dark mode uses VS Code's Abyss palette
+
+`Pinta.Resources/Resources/style-abyss-dark.css` overrides libadwaita's
+named colors (`window_bg_color`, `sidebar_bg_color`, `accent_bg_color`,
+`theme_selected_bg_color`, etc.) with the exact values from VS Code's
+built-in Abyss theme, so every stock widget picks it up for free.
+`Pinta.Gui.Widgets/Ars/AbyssDarkTheme.cs` swaps it in/out in code by
+watching `Adw.StyleManager`'s generic property-notify signal for `"dark"`
+(there's no dedicated `NotifyDark` event in the GirCore binding - confirmed
+by reflecting on the actual `Adw-1.dll`), since GTK CSS has no media-query
+equivalent. Applies whenever the resolved scheme is dark, system-default or
+user-forced.
+
+## Implemented: basic command registry, ARS tool bindings, canvas-only mode
+
+`Pinta.Core/Ars/ArsCommandRegistry.cs` is the "one command registry" the
+spec calls for: a flat list of `(id, description, key, action)` entries
+with a single `TryDispatchKey(Gdk.Key)` lookup. It intentionally carries no
+count/context/repeatability metadata yet - add that when a which-key popup
+or colon-command mode (neither built) actually needs it, not before.
+
+Before adding any tool keybindings, the existing Pinta tool shortcuts
+(`BaseTool.ShortcutKey`) were checked: `b`/`e`/`f` (brush/eraser/fill)
+already match the spec's keyboard layer exactly. `i` and `v` don't - Pinta
+already uses `K` (color picker) and `S` (shared by rectangle select, lasso,
+and magic wand). Rather than reassign those and risk breaking existing
+muscle memory, `i` and `v` are registered as ARS commands in
+`Pinta.Gui.Widgets/Ars/ArsKeyboardLayer.cs`, dispatched in
+`MainWindow.HandleGlobalKeyPress` only *after* Pinta's own
+`ToolManager.SetCurrentTool(Gdk.Key)` check has had first refusal - `K` and
+`S` are untouched.
+
+The same file implements `Tab` as a canvas-only mode toggle, by reusing
+Pinta's existing `ToolBar`/`ToolBox`/`ToolWindows` view-visibility toggle
+actions (confirmed these apply live via their registered `Toggled` handlers,
+unlike `MenuBar`, which requires an app restart - see
+`MenuBarToggledAction.cs` - so `MenuBar` is deliberately left alone). The
+status bar stays visible throughout, per spec section 31.
+
 ## Not yet built
 
-Everything from Milestone 2 onward in the original brief - the command
-registry/which-key/colon-command layer, reference workflow (visibility/
-opacity/split view), direct canvas resize handles, ARS Pen/Pixel Pencil tool
-presets, palette extraction, workflow presets, smart role inference - is
-unimplemented. Semantic layer roles exist as both a real feature and as the
-worked example for how the rest should be built: small `Pinta.Core.Ars`
-model + history item, thin hook into the relevant existing Pinta UI file,
-reuse of Pinta's own action/history/persistence systems throughout.
+Which-key popup, colon-command mode, dot-repeat, macros, reference workflow
+(visibility/opacity/split view), direct canvas resize handles, ARS Pen/
+Pixel Pencil tool presets, palette extraction, workflow presets, and smart
+role inference are all unimplemented. The dense statusline format from spec
+section 30 (`DRAW | Ink | ARS Pen 4px | #181818 | 127% | REF 35% |
+1800x1800`) is also unimplemented - Pinta's existing status bar (cursor
+position, selection bounds, zoom) was left alone rather than restructured
+without a reliable way to visually verify the result in this session (see
+`docs/testing.md`).
+
+What's implemented (semantic layer roles, the Abyss dark palette, the
+command registry + tool bindings + canvas-only mode) is also the worked
+example for how the rest should be built: a small `Pinta.Core.Ars` model
+(plus a `Pinta.Gui.Widgets/Ars` or `Pinta/Ars` piece when GTK/UI types are
+needed), a thin hook into the relevant existing Pinta file, and reuse of
+Pinta's own action/history/persistence/settings systems throughout - never
+parallel infrastructure.
