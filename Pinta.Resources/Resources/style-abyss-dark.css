@@ -1,0 +1,62 @@
+/*
+ * ARS dark palette, taken verbatim from VS Code's built-in "Abyss" theme
+ * (extensions/theme-abyss/themes/abyss-color-theme.json in microsoft/vscode).
+ * Applied only while Adw.StyleManager reports dark mode - see
+ * Pinta.Gui.Widgets/Ars/AbyssDarkTheme.cs for the toggle. Overrides
+ * libadwaita's named colors, which its own stylesheets and every stock
+ * widget already draw from, so this covers window chrome, panels, popovers,
+ * and controls without re-styling each widget individually.
+ */
+
+@define-color window_bg_color #000c18;       /* editor.background */
+@define-color window_fg_color #6688cc;       /* editor.foreground */
+@define-color view_bg_color #000c18;         /* editor.background */
+@define-color view_fg_color #6688cc;         /* editor.foreground */
+
+@define-color headerbar_bg_color #10192c;    /* titleBar.activeBackground */
+@define-color headerbar_fg_color #6688cc;
+@define-color headerbar_border_color #2b2b4a; /* panel.border */
+@define-color headerbar_backdrop_color #10192c;
+@define-color headerbar_shade_color #00000055;
+
+@define-color sidebar_bg_color #060621;      /* sideBar.background */
+@define-color sidebar_fg_color #6688cc;
+@define-color sidebar_backdrop_color #060621;
+@define-color sidebar_border_color #2b2b4a;  /* panel.border */
+
+@define-color secondary_sidebar_bg_color #10192c; /* sideBarSectionHeader.background */
+@define-color secondary_sidebar_fg_color #6688cc;
+@define-color secondary_sidebar_backdrop_color #10192c;
+@define-color secondary_sidebar_border_color #2b2b4a;
+
+@define-color popover_bg_color #181f2f;      /* input/dropdown.background */
+@define-color popover_fg_color #6688cc;
+
+@define-color card_bg_color #10192c;
+@define-color card_fg_color #6688cc;
+@define-color card_shade_color #00000055;
+
+@define-color dialog_bg_color #10192c;
+@define-color dialog_fg_color #6688cc;
+
+@define-color accent_bg_color #0063a5;       /* badge/progressBar/statusBarItem.prominent */
+@define-color accent_color #80a2c2;          /* editorLineNumber.activeForeground */
+@define-color accent_fg_color #ffffff;
+
+@define-color destructive_bg_color #AB395B;  /* inputValidation.errorBorder */
+@define-color destructive_color #ff9da4;     /* terminal.ansiRed */
+@define-color destructive_fg_color #ffffff;
+
+@define-color success_color #22aa44;         /* String token color */
+@define-color warning_color #ffeead;         /* terminal.ansiYellow */
+@define-color error_color #ff9da4;           /* terminal.ansiRed */
+
+@define-color window_outline_color #2b2b4a;  /* panel.border */
+@define-color border_color #2b2b4a;
+
+@define-color theme_selected_bg_color #08286b;   /* list.activeSelectionBackground */
+@define-color theme_selected_fg_color #ffffff;
+
+#canvas {
+    box-shadow: 0px 0px 2px 2px #2b2b4a;
+}

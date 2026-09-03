@@ -62,6 +62,9 @@
     <EmbeddedResource Include="Resources\style.css" >
       <LogicalName>style.css</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="Resources\style-abyss-dark.css" >
+      <LogicalName>style-abyss-dark.css</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <Import Project="../properties/ReferenceGirCoreGtk40.props" />

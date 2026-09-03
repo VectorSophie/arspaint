@@ -70,6 +70,21 @@ public static class ResourceLoader
 
 	}
 
+	/// <summary>
+	/// Loads the ARS Abyss dark palette (style-abyss-dark.css) without adding
+	/// it to the display - the caller decides when to add/remove it based on
+	/// the active color scheme. See Pinta.Gui.Widgets/Ars/AbyssDarkTheme.cs.
+	/// </summary>
+	public static CssProvider? LoadAbyssDarkCssProvider ()
+	{
+		if (!TryGetBytesFromAssembly (Assembly.GetExecutingAssembly (), "style-abyss-dark.css", out Bytes? bytes))
+			return null;
+
+		CssProvider cssProvider = CssProvider.New ();
+		cssProvider.LoadFromBytes (bytes);
+		return cssProvider;
+	}
+
 	private static bool TryGetIconFromTheme (string name, int size, [NotNullWhen (true)] out Texture? image)
 	{
 		image = null;

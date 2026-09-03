@@ -338,6 +338,7 @@ internal sealed class MainWindow
 		bool maximize = PintaCore.Settings.GetSetting (SettingNames.WINDOW_MAXIMIZED, false);
 
 		ResourceLoader.LoadCssStyles ();
+		Ars.AbyssDarkTheme.Initialize ();
 
 		window_shell = new WindowShell (
 			app,
