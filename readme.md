@@ -1,38 +1,43 @@
 
-# Pinta - [Simple Gtk# Paint Program](http://pinta-project.com/)
+# ARSPaint
 
-<a href='https://flathub.org/apps/com.github.PintaProject.Pinta'><img width='200' alt='Get it on Flathub' src='https://flathub.org/api/badge?locale=en'/></a>
-[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/pinta)
+ARSPaint is a drawing editor built around direct canvas interaction,
+reference-aware layers, fast keyboard commands, workflow presets, and simple
+color extraction. **ARSPaint is based on [Pinta](https://www.pinta-project.com/)**
+and keeps almost all of it - normal layers, effects, adjustments, selection
+tools, text, shapes, gradients, blend modes, history, file formats, add-ins -
+plus an additive ARS-specific workflow layer on top. Someone who ignores the
+ARS features entirely still has a capable, ordinary Pinta.
 
-[![Translation status](https://hosted.weblate.org/widget/pinta/pinta/287x66-grey.png)](https://hosted.weblate.org/engage/pinta/)
-[![Build Status](https://github.com/PintaProject/Pinta/workflows/Build/badge.svg)](https://github.com/PintaProject/Pinta/actions)
+The workflow this is built for: bring in a reference image, draw lineart
+with one predictable default pen, optionally color and shade it, export.
+The interaction principle is that the mouse/stylus does spatial work and the
+keyboard does everything else - tool switching, layer state, view, presets.
 
-Copyright (C) 2010 Jonathan Pobst <monkey AT jpobst DOT com>
+See `UPSTREAM.md` for the exact Pinta revision this is based on and how to
+pull in upstream updates, `docs/architecture.md` for how ARS code is
+organized and where it hooks into Pinta, and `docs/legacy-arspaint.md` for
+why this isn't the original Rust/egui ARSPaint prototype (preserved on the
+`legacy-rust` branch).
 
-Pinta is a GTK clone of [Paint.Net 3.0](http://www.getpaint.net/), with support for Linux, Windows, and macOS.
+## Status
 
-Original Pinta code is licensed under the MIT License:
-See `license-mit.txt` for the MIT License
+Early. Semantic layer roles (`Reference`/`Ink`/`Color`/`Shade`, undoable,
+`.ora`-persisted) are implemented; see `docs/architecture.md` for what's
+built and what's still just in the spec.
 
-Code from Paint.Net 3.36 is used under the MIT License and retains the
-original headers on source files.
+## Attribution and licensing
 
-See `license-pdn.txt` for Paint.Net's original license.
+Pinta is Copyright (C) 2010 Jonathan Pobst and contributors, MIT-licensed
+(`license-mit.txt`); it also incorporates MIT-licensed code from Paint.NET
+3.36 (`license-pdn.txt`). ARSPaint does not claim authorship of Pinta or
+Paint.NET - it's a fork with an additional workflow layer credited in the
+About dialog and here.
 
-
-## Icons are from:
-
-- [Paint.Net 3.0](http://www.getpaint.net/)
-Used under [MIT License](http://www.opensource.org/licenses/mit-license.php)
-
-- [Silk icon set](https://github.com/markjames/famfamfam-silk-icons)
-Used under [Creative Commons Attribution 3.0 License](http://creativecommons.org/licenses/by/3.0/)
-
-- [Fugue icon set](https://p.yusukekamiyamane.com)
-Used under [Creative Commons Attribution 3.0 License](http://creativecommons.org/licenses/by/3.0/)
-
-- Pinta contributors, under the same license as the project itself
-(see `Pinta.Resources/icons/pinta-icons.md` for the list of such icons)
+- [Paint.NET 3.0](http://www.getpaint.net/) icons, MIT License
+- [Silk icon set](https://github.com/markjames/famfamfam-silk-icons), CC BY 3.0
+- [Fugue icon set](https://p.yusukekamiyamane.com), CC BY 3.0
+- Pinta contributors' icons (see `Pinta.Resources/icons/pinta-icons.md`)
 
 ## Building on Windows
 
@@ -44,12 +49,17 @@ First, install the required GTK-related dependencies:
 Pinta can then be built by opening `Pinta.sln` in [Visual Studio](https://visualstudio.microsoft.com/).
 Ensure that .NET 8 is installed via the Visual Studio installer.
 
-For building on the command line:
+For building on the command line, `clang64/bin` needs to be on `PATH` at
+run/test time so the app can find the GTK4/libadwaita DLLs:
 - [Install the .NET 8 SDK](https://dotnet.microsoft.com/).
 - Build:
-  - `dotnet build`
+  - `dotnet build Pinta.sln -p:Platform="Any CPU"`
 - Run:
-  - `dotnet run --project Pinta`
+  - `export PATH="/c/msys64/clang64/bin:$PATH"` (adjust for your MSYS2 install location)
+  - `dotnet run --project Pinta -p:Platform="Any CPU"`
+- Test:
+  - `dotnet test tests/Pinta.Core.Tests/Pinta.Core.Tests.csproj -c Debug`
+  - `dotnet test tests/Pinta.Effects.Tests/Pinta.Effects.Tests.csproj -c Debug`
 
 ## Building on macOS
 
@@ -78,22 +88,19 @@ For building on the command line:
     - Add the `--prefix=<install directory>` argument to install to a directory other than `/usr/local`.
   - `make install`
 
-## Building and Debugging in Docker
+## Contributing to ARSPaint
 
-Follow the instructions of the corresponding [pinta-virtual-dev-environment](https://github.com/janrothkegel/pinta-virtual-dev-environment) project
+This is a personal fork; see `docs/architecture.md` before adding ARS
+features and `UPSTREAM.md` before merging a new Pinta release. For anything
+about Pinta itself (not the ARS layer), upstream's own channels apply:
 
-## Getting help / contributing:
-
-- You can get [technical help](https://github.com/PintaProject/Pinta/discussions).
-- You can report [bugs/issues](https://github.com/PintaProject/Pinta/issues).
-- You can make [suggestions](https://github.com/PintaProject/Pinta/discussions/categories/ideas).
-- You can help [translate Pinta to your native language](https://hosted.weblate.org/engage/pinta/).
-- You can fork the project on [Github](https://github.com/PintaProject/Pinta).
-- You can get help in #pinta on irc.gnome.org.
-- For details on notable changes of each release, take a look at the [CHANGELOG](https://github.com/PintaProject/Pinta/blob/master/CHANGELOG.md).
-- For details on patching, take a look at `patch-guidelines.md` in the repo.
+- [Technical help](https://github.com/PintaProject/Pinta/discussions)
+- [Bugs/issues](https://github.com/PintaProject/Pinta/issues)
+- [Pinta CHANGELOG](https://github.com/PintaProject/Pinta/blob/master/CHANGELOG.md)
+- `patch-guidelines.md` in this repo, for patching conventions
 
 ## Code signing policy
+
+Inherited from upstream Pinta:
 - Free code signing on Windows provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
-- Committers and approvers: [Pinta Maintainers](https://github.com/orgs/PintaProject/people)
 - Privacy policy: this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
