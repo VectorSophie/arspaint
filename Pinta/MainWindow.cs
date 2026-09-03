@@ -257,6 +257,11 @@ internal sealed class MainWindow
 		if (!args.State.HasModifierKey () && PintaCore.Tools.SetCurrentTool (args.GetKey ()))
 			return true;
 
+		// ARS: tool-switching keyboard layer + canvas-only mode - only for
+		// keys Pinta's own tool shortcuts above didn't already claim.
+		if (!args.State.HasModifierKey () && Core.Ars.ArsCommandRegistry.TryDispatchKey (args.GetKey ()))
+			return true;
+
 		// Finally, see if the palette widget wants it.
 		bool shouldSwapColors = !args.State.HasModifierKey () && args.GetKey ().ToUpper ().Value == Gdk.Constants.KEY_X;
 
@@ -430,6 +435,9 @@ internal sealed class MainWindow
 		// ARS: semantic layer roles (docs/architecture.md)
 		Ars.LayerRoleActions.RegisterActions (app);
 		Ars.LayerRoleActions.RegisterHandlers ();
+
+		// ARS: tool-switching keyboard layer + canvas-only mode (docs/architecture.md)
+		Ars.ArsKeyboardLayer.Initialize ();
 
 		PintaCore.Chrome.InitializeMainMenu (adjustmentsMenu, effectsMenu);
 
