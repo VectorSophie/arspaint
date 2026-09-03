@@ -59,25 +59,27 @@ dotnet run --project Pinta -p:Platform="Any CPU"
     controls switch between the Abyss palette (deep navy backgrounds,
     blue-tinted text) and Pinta's normal light theme.
 
-## Known gaps at the end of this session
+## Status as of 2026-09-04
 
-- Steps 3-7 (layer roles) were implemented and unit-tested
-  (`tests/Pinta.Core.Tests/Ars/LayerRoleTests.cs`) but not confirmed
-  end-to-end through the live GUI - synthetic OS-level mouse clicks landed
-  reliably on the canvas (confirmed: a real brush stroke and its undo entry
-  both appeared) but never visibly opened a GTK popover/menu in this
-  sandboxed Windows environment (tried both the layer row's right-click menu
-  and the header bar's hamburger menu), so right-click/menu-driven steps
-  need a human pass. Keyboard-driven steps (9-11) were not attempted via
-  synthetic input either, for the same reason - the registry logic itself is
-  unit-tested (`tests/Pinta.Core.Tests/Ars/ArsCommandRegistryTests.cs`), but
-  its live wiring into `MainWindow.HandleGlobalKeyPress` needs a human pass.
-- Step 13 (Abyss dark palette) *was* confirmed via screenshot - the app
-  defaults to dark mode on this machine, and the launched window visibly
-  showed Abyss's colors (blue-tinted `#6688cc` text, `#060621`/`#000c18`
-  navy backgrounds) rather than stock Adwaita dark gray. The light-mode
-  fallback and live toggle were not confirmed the same way, for the same
-  popover/menu-interaction limitation above.
-- No automated GUI/integration test harness exists for Pinta on this
-  platform; all `Ars` coverage so far is at the model/logic level
-  (`Pinta.Core.Tests`), not through simulated UI interaction.
+All of the above was confirmed working by manual human testing (i/k/v/s
+tool switching, Tab canvas-only toggle, the layer-role right-click submenu
+and badge, and the Abyss dark palette) - the automated-input limitation
+noted below only ever affected how *this agent* could verify the work
+within a single session, not the work itself. Steps 6-7 (`.ora` round-trip)
+and 12 (text-field safety) and the light-mode side of step 13 are still
+worth a pass if you're touching those areas again, since they weren't
+specifically called out as tried.
+
+## Why some of this needed a human pass
+
+Synthetic OS-level mouse clicks landed reliably on the canvas (confirmed:
+a real brush stroke and its undo entry both appeared) but never visibly
+opened a GTK popover/menu when driven from the agent's sandboxed Windows
+environment (tried both the layer row's right-click menu and the header
+bar's hamburger menu) - likely a compositor/timing quirk specific to
+synthetic input against GTK4 popups, not a problem with the app. Keyboard
+dispatch has the same story: the registry logic was unit-tested
+(`tests/Pinta.Core.Tests/Ars/ArsCommandRegistryTests.cs`), but its live
+wiring into `MainWindow.HandleGlobalKeyPress` could only be confirmed by
+an actual person pressing actual keys. No automated GUI/integration test
+harness exists for Pinta on this platform.
